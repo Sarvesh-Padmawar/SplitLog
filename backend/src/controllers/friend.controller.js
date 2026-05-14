@@ -1,6 +1,7 @@
 import User from "../models/User.model.js";
 import FriendRequest from "../models/FriendRequest.model.js";
 import Friendship from "../models/Friendship.model.js";
+import Notification from "../models/Notification.model.js";
 
 /* ================= SEARCH USER ================= */
 export const searchUserByUsername = async (req, res) => {
@@ -121,14 +122,24 @@ export const getPendingRequests = async (req, res) => {
     const requests = await FriendRequest.find({
       to: userId,
       status: "pending",
-    }).populate("from", "name username email");
+    })
+      .populate("from", "name username") // 🔴 IMPORTANT
+      .select("_id from");
 
-    res.status(200).json(requests);
+    // map to frontend-friendly shape
+    const formatted = requests.map((req) => ({
+      _id: req._id,
+      name: req.from.name,
+      username: req.from.username,
+    }));
+
+    res.status(200).json(formatted);
   } catch (error) {
     console.error("Error fetching requests:", error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 /* ================= ACCEPT FRIEND REQUEST ================= */
 export const acceptFriendRequest = async (req, res) => {
@@ -181,9 +192,42 @@ export const rejectFriendRequest = async (req, res) => {
 
     await FriendRequest.findByIdAndDelete(requestId);
 
+    // Notify the person who sent the friend request that it was rejected
+    const rejecter = await User.findById(userId).select("name");
+    await Notification.create({
+      recipient: request.from,
+      sender: userId,
+      type: "friend_rejected",
+      message: `${rejecter?.name || "Someone"} rejected your friend request.`,
+    });
+
     res.status(200).json({ message: "Friend request rejected" });
   } catch (error) {
     console.error("Error rejecting request:", error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
+export const listFriends=async (req,res)=>{
+  try {
+    const userId=req.user;
+    const friendship=await Friendship.find({
+      $or:[{user1:userId},{user2:userId}],
+    })
+    .populate("user1","name username email")
+    .populate("user2","name username email");
+
+    const friends=friendship.map((friendship)=>{
+      if (friendship.user1._id.toString() === userId) {
+        return friendship.user2;
+      }
+      return friendship.user1;
+    });
+    res.status(200).json(friends);
+
+  } catch (error) {
+     console.error("Error listing friends:", error);
+      res.status(500).json({ message: error.message });
+  }
+}

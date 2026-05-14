@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-surface-300 text-gray-100;
+  }
+
+  /* Remove tap highlight on mobile / click flash */
+  *,
+  *::before,
+  *::after {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Remove default focus outline on non-keyboard interactions */
+  *:focus {
+    outline: none;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-emerald-500/30 text-white;
+  }
+
+  /* Smooth scroll */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+
+  /* Glass panels — solid bg to prevent compositing layer bleed */
+  .glass {
+    background: rgba(15, 19, 32, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-strong {
+    background: rgba(15, 19, 32, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Gradient border effect */
+  .gradient-border {
+    position: relative;
+  }
+
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.4), rgba(99, 102, 241, 0.3), rgba(16, 185, 129, 0.1));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Animated gradient background for auth */
+  .auth-gradient-bg {
+    background: linear-gradient(135deg, #0b0f1a 0%, #0d1f2d 25%, #0f1a2e 50%, #111827 75%, #0b0f1a 100%);
+    background-size: 400% 400%;
+    animation: gradientShift 12s ease infinite;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply bg-gradient-to-r from-white/[0.04] via-white/[0.08] to-white/[0.04];
+    background-size: 200% 100%;
+    @apply animate-shimmer rounded-lg;
+  }
+}
+
+@layer utilities {
+
+  /* Hide scrollbar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Custom thin scrollbar for dark theme */
+  .dark-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .dark-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .dark-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+
+  .dark-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Stagger children animations */
+  .stagger-children>*:nth-child(1) {
+    animation-delay: 0ms;
+  }
+
+  .stagger-children>*:nth-child(2) {
+    animation-delay: 60ms;
+  }
+
+  .stagger-children>*:nth-child(3) {
+    animation-delay: 120ms;
+  }
+
+  .stagger-children>*:nth-child(4) {
+    animation-delay: 180ms;
+  }
+
+  .stagger-children>*:nth-child(5) {
+    animation-delay: 240ms;
+  }
+
+  .stagger-children>*:nth-child(6) {
+    animation-delay: 300ms;
+  }
+}
+
+/* Auth gradient animation */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Recharts containment */
+.recharts-wrapper,
+.recharts-surface {
+  overflow: hidden !important;
+}
+
+.recharts-tooltip-wrapper {
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+.recharts-active-dot,
+.recharts-dot {
+  filter: none !important;
+}
