@@ -50,6 +50,7 @@ const expenseSchema = new mongoose.Schema(
     },
     date: {
       type: Date,
+      default: Date.now,
     },
     category: {
   type: String,
@@ -63,5 +64,9 @@ const expenseSchema = new mongoose.Schema(
   }
 );
 
+
+// Compound indexes for optimized query performance and preventing in-memory sorts
+expenseSchema.index({ paidBy: 1, date: -1 });
+expenseSchema.index({ "splits.user": 1, date: -1 });
 
 export default mongoose.model("Expense", expenseSchema);

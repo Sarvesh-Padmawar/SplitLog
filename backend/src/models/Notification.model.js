@@ -37,7 +37,8 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Index for fast fetching by recipient
+// Indexes for fast fetching by recipient and fast unread badge calculations
 notificationSchema.index({ recipient: 1, createdAt: -1 });
+notificationSchema.index({ recipient: 1, read: 1 });
 
 export default mongoose.model("Notification", notificationSchema);

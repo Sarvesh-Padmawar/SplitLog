@@ -17,10 +17,12 @@ const categoryIconMap = {
 };
 
 const statusStyles = {
+  pending: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
   awaiting: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
   awaiting_response: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
+  open: "bg-amber-500/15 text-amber-400 border border-amber-500/20",
   unsettled: "bg-amber-500/15 text-amber-400 border border-amber-500/20",
-  pending: "bg-amber-500/15 text-amber-400 border border-amber-500/20",
+  partially_settled: "bg-indigo-500/15 text-indigo-400 border border-indigo-500/20",
   settled: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20",
   rejected: "bg-red-500/15 text-red-400 border border-red-500/20",
 };
@@ -28,15 +30,18 @@ const statusStyles = {
 // Dynamic label generator — uses progress counters when available
 const getStatusLabel = (exp) => {
   const { status, acceptedCount, totalFriends, settledFriends } = exp;
-  if (status === "awaiting_response" && totalFriends != null) {
-    return `Awaiting response (${acceptedCount}/${totalFriends})`;
+  if ((status === "pending" || status === "awaiting_response") && totalFriends != null && totalFriends > 0) {
+    return `Pending approval (${acceptedCount}/${totalFriends})`;
   }
-  if (status === "pending" && totalFriends != null) {
-    return `Pending (${settledFriends}/${totalFriends} settled)`;
+  if (status === "partially_settled" && totalFriends != null && totalFriends > 0) {
+    return `Partially settled (${settledFriends}/${totalFriends})`;
   }
   const labels = {
+    pending: "pending approval",
     awaiting: "awaiting response",
-    unsettled: "pending",
+    awaiting_response: "pending approval",
+    open: "open",
+    unsettled: "open",
     settled: "settled ✓",
     rejected: "rejected",
   };
@@ -165,28 +170,45 @@ export default function RecentTransactions() {
 
                 {/* Date & Time */}
                 <div className="text-right min-w-[80px]">
-                  <p className="text-xs text-gray-400">{exp.date}</p>
-                  <p className="text-xs text-gray-600">{exp.time}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(exp.rawTimestamp).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    {new Date(exp.rawTimestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
                 </div>
 
                 {/* Amount */}
                 <div className="text-right min-w-[140px]">
                   <p className="text-xs text-gray-500">
-                    ₹{Math.abs(exp.myShare).toFixed(2)} / ₹{exp.total}
+                    ₹{exp.isSelfExpense ? exp.total.toFixed(2) : Math.abs(exp.myShare).toFixed(2)} / ₹{exp.total}
                   </p>
                   {exp.status === "rejected" ? (
                     <p className="text-sm font-semibold text-gray-600">—</p>
-                  ) : exp.paidBy === "You" && Math.abs(exp.myShare) === exp.total ? (
+                  ) : exp.isSelfExpense ? (
                     <p className="text-sm font-semibold text-gray-400">
                       Self expense
                     </p>
+                  ) : exp.status === "settled" ? (
+                    /* ── Settled: show historical context, not the misleading "You get ₹0" ── */
+                    <>
+                      <p className="text-sm font-semibold text-gray-400">
+                        {exp.paidBy === "You"
+                          ? `You lent ₹${exp.originalLent.toFixed(2)}`
+                          : `You owed ₹${exp.originalOwed.toFixed(2)}`}
+                      </p>
+                      <p className="text-[10px] text-emerald-400 font-medium mt-0.5">
+                        Settled ✓
+                      </p>
+                    </>
                   ) : (
+                    /* ── Active: show current outstanding balance ── */
                     <p
                       className={`text-sm font-semibold ${
-                        exp.myShare >= 0 ? "text-red-400" : "text-emerald-400"
+                        exp.myShare >= 0 ? "text-emerald-400" : "text-red-400"
                       }`}
                     >
-                      {exp.myShare >= 0 ? "You owe" : "You get"} ₹
+                      {exp.myShare >= 0 ? "You get" : "You owe"} ₹
                       {Math.abs(exp.myShare).toFixed(2)}
                     </p>
                   )}

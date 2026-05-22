@@ -38,7 +38,8 @@ export const registerUser = async (req, res) => {
     });
   } catch (error) {
     const status = error.status || 500;
-    return res.status(status).json({ message: error.message || "Server error. Please try again." });
+    console.error("Register error:", error);
+    return res.status(status).json({ message: status === 500 ? "Server error. Please try again." : error.message });
   }
 };
 
@@ -68,7 +69,8 @@ export const loginUser = async (req, res) => {
     });
   } catch (error) {
     const status = error.status || 500;
-    return res.status(status).json({ message: error.message || "Server error. Please try again." });
+    console.error("Login error:", error);
+    return res.status(status).json({ message: status === 500 ? "Server error. Please try again." : error.message });
   }
 };
 
@@ -132,7 +134,8 @@ export const getMe = async (req, res) => {
     });
   } catch (error) {
     const status = error.status || 500;
-    return res.status(status).json({ message: error.message || "Server error" });
+    console.error("GetMe error:", error);
+    return res.status(status).json({ message: status === 500 ? "Server error. Please try again." : error.message });
   }
 };
 

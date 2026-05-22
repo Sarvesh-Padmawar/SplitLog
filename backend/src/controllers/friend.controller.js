@@ -2,6 +2,8 @@ import User from "../models/User.model.js";
 import FriendRequest from "../models/FriendRequest.model.js";
 import Friendship from "../models/Friendship.model.js";
 import Notification from "../models/Notification.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { getPaginationParams, buildPaginationMeta, buildPaginatedResponse } from "../utils/pagination.js";
 
 /* ================= SEARCH USER ================= */
 export const searchUserByUsername = async (req, res) => {
@@ -115,30 +117,35 @@ export const sendFriendRequest = async (req, res) => {
 
 
 /* ================= GET PENDING REQUESTS ================= */
-export const getPendingRequests = async (req, res) => {
-  try {
-    const userId = req.user;
+export const getPendingRequests = asyncHandler(async (req, res) => {
+  const userId = req.user;
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-    const requests = await FriendRequest.find({
-      to: userId,
-      status: "pending",
-    })
-      .populate("from", "name username") // 🔴 IMPORTANT
-      .select("_id from");
+  const query = {
+    to: userId,
+    status: "pending",
+  };
 
-    // map to frontend-friendly shape
-    const formatted = requests.map((req) => ({
-      _id: req._id,
-      name: req.from.name,
-      username: req.from.username,
-    }));
+  const totalItems = await FriendRequest.countDocuments(query);
 
-    res.status(200).json(formatted);
-  } catch (error) {
-    console.error("Error fetching requests:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
+  const requests = await FriendRequest.find(query)
+    .populate("from", "name username") // 🔴 IMPORTANT
+    .select("_id from")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  // map to frontend-friendly shape
+  const formatted = requests.map((req) => ({
+    _id: req._id,
+    name: req.from.name,
+    username: req.from.username,
+  }));
+
+  const meta = buildPaginationMeta(totalItems, page, limit);
+
+  res.status(200).json(buildPaginatedResponse(formatted, meta));
+});
 
 
 /* ================= ACCEPT FRIEND REQUEST ================= */
@@ -209,25 +216,31 @@ export const rejectFriendRequest = async (req, res) => {
 };
 
 
-export const listFriends=async (req,res)=>{
-  try {
-    const userId=req.user;
-    const friendship=await Friendship.find({
-      $or:[{user1:userId},{user2:userId}],
-    })
-    .populate("user1","name username email")
-    .populate("user2","name username email");
+export const listFriends = asyncHandler(async (req, res) => {
+  const userId = req.user;
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-    const friends=friendship.map((friendship)=>{
-      if (friendship.user1._id.toString() === userId) {
-        return friendship.user2;
-      }
-      return friendship.user1;
-    });
-    res.status(200).json(friends);
+  const query = {
+    $or: [{ user1: userId }, { user2: userId }],
+  };
 
-  } catch (error) {
-     console.error("Error listing friends:", error);
-      res.status(500).json({ message: error.message });
-  }
-}
+  const totalItems = await Friendship.countDocuments(query);
+
+  const friendships = await Friendship.find(query)
+    .populate("user1", "name username email")
+    .populate("user2", "name username email")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const friends = friendships.map((friendship) => {
+    if (friendship.user1._id.toString() === userId) {
+      return friendship.user2;
+    }
+    return friendship.user1;
+  });
+
+  const meta = buildPaginationMeta(totalItems, page, limit);
+
+  res.status(200).json(buildPaginatedResponse(friends, meta));
+});

@@ -1,26 +1,36 @@
 import Notification from "../models/Notification.model.js";
 import Settlement from "../models/Settlement.model.js";
-
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { getPaginationParams, buildPaginationMeta, buildPaginatedResponse } from "../utils/pagination.js";
 /* ================= GET NOTIFICATIONS ================= */
-export const getNotifications = async (req, res) => {
-  try {
-    const notifications = await Notification.find({ recipient: req.user })
-      .populate("sender", "name username")
-      .populate("expense", "totalAmount description category")
-      .populate("settlement", "amount status from to")
-      .sort({ createdAt: -1 })
-      .limit(50);
+export const getNotifications = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-    const unreadCount = await Notification.countDocuments({
-      recipient: req.user,
-      read: false,
-    });
+  const query = { recipient: req.user };
 
-    res.status(200).json({ notifications, unreadCount });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+  const totalItems = await Notification.countDocuments(query);
+
+  const notifications = await Notification.find(query)
+    .populate("sender", "name username")
+    .populate("expense", "totalAmount description category")
+    .populate("settlement", "amount status from to")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const unreadCount = await Notification.countDocuments({
+    recipient: req.user,
+    read: false,
+  });
+
+  const meta = buildPaginationMeta(totalItems, page, limit);
+  const response = buildPaginatedResponse(notifications, meta);
+  
+  // Attach unreadCount as extra metadata
+  response.unreadCount = unreadCount;
+
+  res.status(200).json(response);
+});
 
 /* ================= MARK ONE AS READ ================= */
 export const markAsRead = async (req, res) => {
@@ -37,7 +47,8 @@ export const markAsRead = async (req, res) => {
 
     res.status(200).json({ message: "Marked as read", notification });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Mark as read error:", error);
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };
 
@@ -51,7 +62,8 @@ export const markAllAsRead = async (req, res) => {
 
     res.status(200).json({ message: "All notifications marked as read" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Mark all as read error:", error);
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };
 
@@ -110,6 +122,6 @@ export const respondToSettlement = async (req, res) => {
     });
   } catch (error) {
     console.error("Respond settlement error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };

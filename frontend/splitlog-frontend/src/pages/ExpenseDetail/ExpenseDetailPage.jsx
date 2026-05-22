@@ -34,38 +34,48 @@ const categoryIconMap = {
 
 /* ── Status config ─────────────────────────────────────────── */
 const statusConfig = {
-  awaiting_response: {
+  pending: {
     cls: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
-    label: null, // dynamic
+    label: "pending approval",
   },
   awaiting: {
     cls: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
-    label: "Awaiting response",
+    label: "pending approval",
   },
-  pending: {
+  awaiting_response: {
+    cls: "bg-sky-500/15 text-sky-400 border border-sky-500/20",
+    label: "pending approval",
+  },
+  open: {
     cls: "bg-amber-500/15 text-amber-400 border border-amber-500/20",
-    label: null, // dynamic
+    label: "open",
   },
   unsettled: {
     cls: "bg-amber-500/15 text-amber-400 border border-amber-500/20",
-    label: "Pending",
+    label: "open",
+  },
+  partially_settled: {
+    cls: "bg-indigo-500/15 text-indigo-400 border border-indigo-500/20",
+    label: "partially settled",
   },
   settled: {
     cls: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20",
-    label: "Settled ✓",
+    label: "settled ✓",
   },
   rejected: {
     cls: "bg-red-500/15 text-red-400 border border-red-500/20",
-    label: "Rejected",
+    label: "rejected",
   },
 };
 
 function getStatusLabel(exp) {
   const { status, acceptedCount, totalFriends, settledFriends } = exp;
-  if (status === "awaiting_response" && totalFriends != null)
-    return `Awaiting response (${acceptedCount}/${totalFriends})`;
-  if (status === "pending" && totalFriends != null)
-    return `Pending (${settledFriends}/${totalFriends} settled)`;
+  if ((status === "pending" || status === "awaiting_response") && totalFriends != null && totalFriends > 0) {
+    return `Pending approval (${acceptedCount}/${totalFriends})`;
+  }
+  if (status === "partially_settled" && totalFriends != null && totalFriends > 0) {
+    return `Partially settled (${settledFriends}/${totalFriends})`;
+  }
   return statusConfig[status]?.label ?? status;
 }
 
@@ -73,7 +83,9 @@ function getStatusLabel(exp) {
 function ParticipantRow({ p }) {
   const settleColors = {
     paid: "text-emerald-400",
+    settled: "text-emerald-400",
     unsettled: "text-amber-400",
+    open: "text-amber-400",
   };
 
   return (
@@ -124,7 +136,7 @@ function ParticipantRow({ p }) {
         <div
           className={`text-xs font-medium ${settleColors[p.settlementStatus] ?? "text-gray-500"}`}
         >
-          {p.settlementStatus === "paid" ? (
+          {p.settlementStatus === "paid" || p.settlementStatus === "settled" ? (
             <span className="flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" /> Settled
             </span>

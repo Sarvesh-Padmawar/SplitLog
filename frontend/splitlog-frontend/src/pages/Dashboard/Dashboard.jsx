@@ -3,11 +3,12 @@ import SummaryCards from "../../features/dashboard/components/SummaryCards";
 import GraphPlaceholder from "./GraphPlaceholder";
 import RecentTransactions from "../../features/dashboard/components/RecentTransactions";
 import AddExpenseModal from "../../features/expenses/components/AddExpenseModal";
-import { getUser } from "../../utils/auth";
+import { useAuth } from "../../modules/auth/hooks/useAuth";
 import { Plus } from "lucide-react";
+import ErrorBoundary from "../../components/ErrorBoundary";
 
 function Dashboard() {
-  const user = getUser();
+  const { user } = useAuth();
   const [showAddExpense, setShowAddExpense] = useState(false);
 
   // Get greeting based on time of day
@@ -39,15 +40,21 @@ function Dashboard() {
         </div>
 
         {/* Row 1 — Summary Cards */}
-        <SummaryCards />
+        <ErrorBoundary title="Financial Overview">
+          <SummaryCards />
+        </ErrorBoundary>
 
         {/* Row 2 — Chart + Transactions */}
         <div className="flex flex-col lg:flex-row gap-6 isolate">
           <div className="w-full lg:w-[38%] relative z-0 isolate overflow-hidden rounded-2xl">
-            <GraphPlaceholder />
+            <ErrorBoundary title="Expense History Chart">
+              <GraphPlaceholder />
+            </ErrorBoundary>
           </div>
           <div className="flex-1 relative z-0 isolate overflow-hidden rounded-2xl">
-            <RecentTransactions />
+            <ErrorBoundary title="Recent Activities Feed">
+              <RecentTransactions />
+            </ErrorBoundary>
           </div>
         </div>
       </div>

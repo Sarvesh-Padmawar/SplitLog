@@ -51,7 +51,7 @@ export default function DashboardHistory() {
   const totalExpenses = categoryData.reduce((sum, i) => sum + i.value, 0);
 
   return (
-    <div className="glass rounded-2xl p-5 h-full flex flex-col animate-slideUp isolate relative z-0">
+    <div className="glass rounded-2xl p-5 h-[48vh] min-h-[350px] flex flex-col animate-slideUp isolate relative z-0">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-100">History</h2>
@@ -76,7 +76,7 @@ export default function DashboardHistory() {
 
       {/* ================= TREND ================= */}
       {activeTab === "trend" && (
-        <div className="flex-1">
+        <div className="flex-1 min-h-0">
           {loading ? (
             <Skeleton />
           ) : trendData.length === 0 ? (

@@ -46,9 +46,9 @@ export default function FriendActivityPanel({
 
           {/* ================= TRANSACTIONS ================= */}
           {activeTab === "transactions" && (() => {
-            // Exclude paid (settled) AND rejected — rejected ones go to Settlements tab
+            // Exclude settled AND rejected — rejected ones go to Settlements tab
             const unsettledExpenses = expenses.filter(
-              (exp) => exp.status !== "paid" && exp.status !== "rejected"
+              (exp) => exp.status !== "settled" && exp.status !== "rejected"
             );
             return (
             <>
@@ -72,21 +72,21 @@ export default function FriendActivityPanel({
                 console.log(`[STATUS] "${exp.description}" → backend status="${exp.status}" | paidByMe=${paidByMe}`);
 
                 // Use backend-computed status directly.
-                // Backend returns: "awaiting" (not accepted), "unsettled" (accepted, not settled),
-                // "paid" (settled), "rejected". Both users get the same value for the same expense.
                 const s = exp.status;
 
                 const badgeClass =
-                  s === "paid"      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+                  s === "settled" ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
                   : s === "rejected" ? "bg-red-500/15 text-red-400 border border-red-500/20"
-                  : s === "unsettled"? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
-                  : "bg-sky-500/15 text-sky-400 border border-sky-500/20"; // awaiting / any unknown
+                  : s === "open" ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                  : s === "partially_settled" ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/20"
+                  : "bg-sky-500/15 text-sky-400 border border-sky-500/20"; // pending approval
 
                 const badgeLabel =
-                  s === "paid"      ? "settled"
+                  s === "settled" ? "settled ✓"
                   : s === "rejected" ? "rejected"
-                  : s === "unsettled"? "pending"
-                  : "awaiting response"; // "awaiting" or any unknown → same for both users
+                  : s === "open" ? "open"
+                  : s === "partially_settled" ? "partially settled"
+                  : "pending approval";
 
                 return (
                   <div

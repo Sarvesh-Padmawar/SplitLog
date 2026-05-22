@@ -1,5 +1,7 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import authRoutes from "./modules/auth/auth.routes.js";
 import friendRoutes from "./routes/friend.routes.js";
 import expenseRoutes from "./routes/expense.routes.js";
@@ -9,10 +11,25 @@ import myexpense from "./routes/myexpense.routes.js";
 import settlementRoutes from "./routes/settlement.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
+import { errorHandler } from "./middleware/error.middleware.js";
+import { notFoundHandler } from "./middleware/notFound.middleware.js";
 
 
 
 const app = express();
+
+// Security headers
+app.use(helmet());
+
+// Global Rate Limiter for all /api routes
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Increased limit for development
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests from this IP. Please try again later." },
+});
+app.use("/api", globalLimiter);
 
 // Manual CORS middleware (cors v2.8.5 has Express 5 compatibility issues)
 app.use((req, res, next) => {
@@ -41,5 +58,11 @@ app.use("/api/settlements", settlementRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
+// ── ERROR HANDLING MIDDLEWARE ──────────────────────────────────────────────
+// 1. Catch 404 and forward to error handler
+app.use(notFoundHandler);
+
+// 2. Global Error Handler (must be the last middleware)
+app.use(errorHandler);
 
 export default app;

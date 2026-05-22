@@ -3,14 +3,16 @@ import Expense from "../models/Expense.model.js";
 import Friendship from "../models/Friendship.model.js";
 import Notification from "../models/Notification.model.js";
 import User from "../models/User.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+import { calculateFriendBalance, allocateSettlementsFIFO } from "../utils/balanceUtils.js";
 
-export const createSettlement = async (req, res) => {
-  try {
+export const createSettlement = asyncHandler(async (req, res) => {
     const from = req.user.toString();
     const { friendId, amount } = req.body;
 
     if (!friendId || !amount || amount <= 0) {
-      return res.status(400).json({ message: "Invalid settlement data" });
+      throw new ApiError(400, "Invalid settlement data");
     }
 
     // 1️⃣ verify friendship
@@ -22,9 +24,7 @@ export const createSettlement = async (req, res) => {
     });
 
     if (!isFriend) {
-      return res.status(403).json({
-        message: "You are not friends with this user",
-      });
+      throw new ApiError(403, "You are not friends with this user");
     }
 
     // Check for existing pending settlement
@@ -34,9 +34,7 @@ export const createSettlement = async (req, res) => {
       status: "pending",
     });
     if (existingPending) {
-      return res.status(400).json({
-        message: "You already have a pending settlement with this friend",
-      });
+      throw new ApiError(400, "You already have a pending settlement with this friend");
     }
 
     // 2️⃣ calculate outstanding balance — same logic as ledger controller
@@ -47,61 +45,36 @@ export const createSettlement = async (req, res) => {
       ],
     });
 
-    // Build settled expense IDs from accepted settlements (skip those entirely)
+    // Get accepted settlements between both users
     const acceptedSettlements = await Settlement.find({
       status: "accepted",
       $or: [
         { from, to: friendId },
         { from: friendId, to: from },
       ],
-    }).populate("expenses", "_id");
-
-    const settledExpenseIds = new Set();
-    acceptedSettlements.forEach((s) => {
-      (s.expenses || []).forEach((e) => {
-        settledExpenseIds.add(e._id ? e._id.toString() : e.toString());
-      });
     });
 
-    // Sum accepted splits on unsettled expenses only
-    let youOwe = 0;
-    let theyOwe = 0;
-
-    expenses.forEach((expense) => {
-      if (settledExpenseIds.has(expense._id.toString())) return;
-      const paidByFriend = expense.paidBy.toString() === friendId;
-
-      expense.splits.forEach((split) => {
-        if (split.status !== "accepted") return;
-
-        if (paidByFriend && split.user.toString() === from) {
-          youOwe += split.amount;   // friend paid → I owe them
-        } else if (!paidByFriend && split.user.toString() === friendId) {
-          theyOwe += split.amount;  // I paid → they owe me
-        }
-      });
-    });
+    // Sum accepted splits and subtract accepted settlements
+    const { youOwe, theyOwe } = calculateFriendBalance(from, friendId, expenses, acceptedSettlements);
 
     const outstandingBalance = Number(Math.abs(youOwe - theyOwe).toFixed(2));
 
     // 4️⃣ block overpayment
     if (outstandingBalance === 0) {
-      return res.status(400).json({ message: "No outstanding balance to settle" });
+      throw new ApiError(400, "No outstanding balance to settle");
     }
 
     if (amount > outstandingBalance) {
-      return res.status(400).json({
-        message: `Settlement amount exceeds outstanding balance of ₹${outstandingBalance.toFixed(2)}`,
-      });
+      throw new ApiError(400, `Settlement amount exceeds outstanding balance of ₹${outstandingBalance.toFixed(2)}`);
     }
 
-    // Collect expense IDs to attach to the new settlement (unsettled + accepted)
-    const alreadySettledIds = settledExpenseIds; // reuse the set already built above
+    // Get FIFO allocation to find which expenses are still unsettled
+    const allocationMap = allocateSettlementsFIFO(from, friendId, expenses, acceptedSettlements);
 
     const settlementExpenseIds = expenses
       .filter((expense) => {
-        if (alreadySettledIds.has(expense._id.toString())) return false;
-        return expense.splits.some(
+        const allocation = allocationMap[expense._id.toString()];
+        return allocation && allocation.status !== "settled" && expense.splits.some(
           (s) => s.status === "accepted" &&
             (s.user.toString() === from || s.user.toString() === friendId)
         );
@@ -133,13 +106,7 @@ export const createSettlement = async (req, res) => {
       message: "Settlement request sent",
       settlement,
     });
-  } catch (error) {
-    console.error("Create settlement error:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-
+});
 
 export const acceptSettlement = async (req, res) => {
   try {
@@ -179,11 +146,9 @@ export const acceptSettlement = async (req, res) => {
     });
   } catch (error) {
     console.error("Accept settlement error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };
-
-
 
 export const rejectSettlement = async (req, res) => {
   try {
@@ -224,6 +189,6 @@ export const rejectSettlement = async (req, res) => {
     });
   } catch (error) {
     console.error("Reject settlement error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };

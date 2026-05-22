@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import api from "../../../shared/services/axios";
 import { showToast } from "../../../components/toastStore";
+import { extractData } from "../../../shared/utils/apiHelper";
 
 const CATEGORIES = [
   { value: "food", label: "Food", emoji: "🍔" },
@@ -39,7 +40,7 @@ export default function AddExpenseModal({ open, onClose, existingExpense, onSucc
       try {
         setLoadingFriends(true);
         const res = await api.get("/friends");
-        setFriends(res.data);
+        setFriends(extractData(res));
       } catch {
         setFriends([]);
       } finally {
@@ -118,7 +119,7 @@ export default function AddExpenseModal({ open, onClose, existingExpense, onSucc
 
   /* ================= AVAILABLE FRIENDS (not already selected) ================= */
   const selectedUserIds = splits.map((s) => s.user);
-  const availableFriends = friends.filter(
+  const availableFriends = (Array.isArray(friends) ? friends : []).filter(
     (f) => !selectedUserIds.includes(f._id)
   );
 
@@ -357,7 +358,7 @@ export default function AddExpenseModal({ open, onClose, existingExpense, onSucc
                         Select friend
                       </option>
                       {/* Show currently selected friend + available ones */}
-                      {friends
+                      {(Array.isArray(friends) ? friends : [])
                         .filter(
                           (f) =>
                             f._id === split.user ||

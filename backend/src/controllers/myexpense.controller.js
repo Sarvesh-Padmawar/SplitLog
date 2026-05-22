@@ -1,24 +1,29 @@
 import Expense from "../models/Expense.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { getPaginationParams, buildPaginationMeta, buildPaginatedResponse } from "../utils/pagination.js";
 
-export const getMyExpenses = async (req, res) => {
-  try {
-    const me = req.user.toString();
+export const getMyExpenses = asyncHandler(async (req, res) => {
+  const me = req.user.toString();
 
-    const expenses = await Expense.find({
-      $or: [
-        { paidBy: me },
-        { splits: { $elemMatch: { user: me } } },
-      ],
-    })
-      .populate("paidBy", "name username")
-      .populate("splits.user", "name username");
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-    // Sort by Date manually to support fallback
-    expenses.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+  const query = {
+    $or: [
+      { paidBy: me },
+      { splits: { $elemMatch: { user: me } } },
+    ],
+  };
 
-    res.status(200).json(expenses);
-  } catch (error) {
-    console.error("My expenses error:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
+  const totalItems = await Expense.countDocuments(query);
+
+  const expenses = await Expense.find(query)
+    .populate("paidBy", "name username")
+    .populate("splits.user", "name username")
+    .sort({ date: -1, createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const meta = buildPaginationMeta(totalItems, page, limit);
+
+  res.status(200).json(buildPaginatedResponse(expenses, meta));
+});

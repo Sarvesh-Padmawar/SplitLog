@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search, UserPlus, Clock, Check, X } from "lucide-react";
 import api from "../../shared/services/axios";
 import { showToast } from "../../components/toastStore";
+import { extractData } from "../../shared/utils/apiHelper";
 
 function DashboardRight({ mode, setMode, fetchFriends, friends = [] }) {
   // Calculate owe summary totals from friends data
@@ -28,7 +29,8 @@ function DashboardRight({ mode, setMode, fetchFriends, friends = [] }) {
       try {
         setLoadingRequests(true);
         const res = await api.get("/friends/getrequests");
-        setPendingRequests(res.data);
+        const requests = extractData(res);
+        setPendingRequests(Array.isArray(requests) ? requests : []);
       } catch (err) {
         console.error("Failed to fetch requests", err);
       } finally {

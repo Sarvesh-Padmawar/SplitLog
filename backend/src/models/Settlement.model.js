@@ -15,7 +15,7 @@ const settlementSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-      min: 1,
+      min: 0.01,
     },
     status: {
       type: String,
@@ -31,5 +31,10 @@ const settlementSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Compound and single-field indexes to optimize bidirectional ledger calculations and history queries
+settlementSchema.index({ from: 1, to: 1, status: 1 });
+settlementSchema.index({ to: 1, from: 1, status: 1 });
+settlementSchema.index({ createdAt: -1 });
 
 export default mongoose.model("Settlement", settlementSchema);

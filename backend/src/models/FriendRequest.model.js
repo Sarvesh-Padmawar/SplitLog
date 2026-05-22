@@ -21,4 +21,8 @@ const friendRequestSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Indexes to speed up listing pending requests and checking active invitation existence
+friendRequestSchema.index({ from: 1, to: 1, status: 1 });
+friendRequestSchema.index({ to: 1, status: 1 });
+
 export default mongoose.model("FriendRequest", friendRequestSchema);

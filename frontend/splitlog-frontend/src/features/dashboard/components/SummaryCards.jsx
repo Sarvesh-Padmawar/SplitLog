@@ -19,18 +19,33 @@ export default function SummaryCards() {
       .finally(() => setLoading(false));
   }, []);
 
-  const fmt = (v) =>
-    v === undefined || v === null
-      ? "—"
-      : `₹${Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (v, showSign = false) => {
+    if (v === undefined || v === null) return "—";
+    const absVal = Math.abs(v).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    if (showSign) {
+      if (v > 0) return `+₹${absVal}`;
+      if (v < 0) return `-₹${absVal}`;
+      return `₹${absVal}`;
+    }
+    return `₹${absVal}`;
+  };
 
   return (
     <div className="w-full">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
         <Card
           title="NET BALANCE"
-          amount={loading ? null : fmt(data?.netBalance)}
-          subtitle="Overall balance"
+          amount={loading ? null : fmt(data?.netBalance, true)}
+          subtitle={
+            data?.netBalance > 0
+              ? "You are owed overall"
+              : data?.netBalance < 0
+              ? "You owe overall"
+              : "All settled up"
+          }
           variant="net"
           icon={<Wallet className="w-5 h-5" />}
           loading={loading}
@@ -73,16 +88,16 @@ export default function SummaryCards() {
   );
 }
 
-function Card({ title, amount, subtitle, variant, icon, loading }) {
+function Card({ title, amount, subtitle, variant, icon, loading, positive }) {
   const config = {
     net: {
       bg: "glass",
-      border: "border-t-2 border-t-emerald-500",
-      iconBg: "bg-emerald-500/20 text-emerald-400",
-      amount: "text-emerald-400",
-      title: "text-emerald-400/80",
+      border: positive === false ? "border-t-2 border-t-red-500" : "border-t-2 border-t-emerald-500",
+      iconBg: positive === false ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400",
+      amount: positive === false ? "text-red-400" : "text-emerald-400",
+      title: positive === false ? "text-red-400/80" : "text-emerald-400/80",
       subtitle: "text-gray-500",
-      glow: "hover:shadow-glow",
+      glow: positive === false ? "hover:shadow-glow-red" : "hover:shadow-glow",
     },
     owe: {
       bg: "glass",

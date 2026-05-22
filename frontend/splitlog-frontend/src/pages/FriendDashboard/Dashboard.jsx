@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../../shared/services/axios";
 import DashboardLeft from "./DashbordLeft";
 import DashboardRight from "./DashboardRight";
+import { extractData } from "../../shared/utils/apiHelper";
 
 export default function FriendsDashboard() {
   const [friends, setFriends] = useState([]);
@@ -28,7 +29,8 @@ export default function FriendsDashboard() {
       });
 
       // Merge balance data into friends
-      const enrichedFriends = friendsRes.data.map((f) => ({
+      const friendsData = extractData(friendsRes);
+      const enrichedFriends = (Array.isArray(friendsData) ? friendsData : []).map((f) => ({
         ...f,
         youOwe: balanceMap[f._id]?.youOwe || 0,
         theyOwe: balanceMap[f._id]?.theyOwe || 0,

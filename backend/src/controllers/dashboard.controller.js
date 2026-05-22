@@ -1,6 +1,9 @@
 import Expense from "../models/Expense.model.js";
 import Friendship from "../models/Friendship.model.js";
 import Settlement from "../models/Settlement.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+import { calculateDashboardSummary, calculateNetBalances, deriveExpenseStatus, allocateSettlementsFIFO } from "../utils/balanceUtils.js";
 
 /* ─── helpers ─────────────────────────────────────────────────── */
 
@@ -24,10 +27,14 @@ const buildSettledIds = async (me) => {
 };
 
 /* ─── GET /api/dashboard/summary ─────────────────────────────── */
-export const getSummary = async (req, res) => {
-  try {
+export const getSummary = asyncHandler(async (req, res) => {
     const me = req.user.toString();
-    const settledIds = await buildSettledIds(me);
+    
+    // Fetch accepted settlements
+    const settlements = await Settlement.find({
+      status: "accepted",
+      $or: [{ from: me }, { to: me }],
+    });
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -39,91 +46,13 @@ export const getSummary = async (req, res) => {
       ],
     }).populate("paidBy", "_id");
 
-    let youOwe = 0;
-    let youGet = 0;
-    let thisMonth = 0;
-    let youPaid = 0;
+    const summary = calculateDashboardSummary(me, expenses, settlements, monthStart);
 
-    expenses.forEach((expense) => {
-      const isSettled = settledIds.has(expense._id.toString());
-      const paidByMe = expense.paidBy._id.toString() === me;
-      const createdAt = new Date(expense.date || expense.createdAt);
-      const isThisMonth = createdAt >= monthStart;
-
-      // Determine if ALL non-payer splits are rejected (fully rejected expense)
-      const nonPayerSplits = expense.splits.filter(
-        (s) => s.user.toString() !== me || !paidByMe
-      );
-      const isSelfExpense =
-        expense.splits.length === 1 &&
-        expense.splits[0].user.toString() === me;
-
-      // My own share in this expense (the split belonging to me)
-      const mySplit = expense.splits.find((s) => s.user.toString() === me);
-
-      // For youOwe/youGet calculations, skip settled and rejected splits
-      if (!isSettled) {
-        expense.splits.forEach((split) => {
-          const uid = split.user.toString();
-          if (split.status !== "accepted") return;
-
-          if (paidByMe && uid !== me) {
-            youGet += split.amount;
-          } else if (!paidByMe && uid === me) {
-            youOwe += split.amount;
-          }
-        });
-      }
-
-      // Whether ALL non-payer splits are rejected (expense is fully rejected from my POV as payer)
-      const allFriendSplitsRejectedOrPending =
-        !isSelfExpense &&
-        paidByMe &&
-        expense.splits
-          .filter((s) => s.user.toString() !== me)
-          .every((s) => s.status === "rejected" || s.status === "pending");
-
-      // ── THIS MONTH (myNetShare) ──────────────────────────────────
-      // My actual cost after splits, for every non-rejected expense this month
-      if (isThisMonth) {
-        if (isSelfExpense) {
-          // Self-only: I bear the full amount
-          thisMonth += expense.totalAmount;
-        } else if (paidByMe && !allFriendSplitsRejectedOrPending) {
-          // I paid for a group: my share = what I paid minus accepted non-rejected friends' portions
-          const othersShare = expense.splits
-            .filter((s) => s.user.toString() !== me && s.status === "accepted")
-            .reduce((sum, s) => sum + s.amount, 0);
-          thisMonth += expense.totalAmount - othersShare;
-        } else if (!paidByMe && mySplit && mySplit.status === "accepted") {
-          // Someone else paid: my cost = my split amount (only if I accepted it)
-          thisMonth += mySplit.amount;
-        }
-
-        // ── YOU PAID (out-of-pocket) ─────────────────────────────
-        // Total I actually fronted as payer, excluding expenses where everyone rejected/pending
-        if (paidByMe && (isSelfExpense || !allFriendSplitsRejectedOrPending)) {
-          youPaid += expense.totalAmount;
-        }
-      }
-    });
-
-    res.status(200).json({
-      netBalance: Number((youGet - youOwe).toFixed(2)),
-      youOwe: Number(youOwe.toFixed(2)),
-      youGet: Number(youGet.toFixed(2)),
-      thisMonth: Number(thisMonth.toFixed(2)),
-      youPaid: Number(youPaid.toFixed(2)),
-    });
-  } catch (err) {
-    console.error("Dashboard summary error:", err);
-    res.status(500).json({ message: err.message });
-  }
-};
+    res.status(200).json(summary);
+});
 
 /* ─── GET /api/dashboard/recent-transactions ─────────────────── */
-export const getRecentTransactions = async (req, res) => {
-  try {
+export const getRecentTransactions = asyncHandler(async (req, res) => {
     const me = req.user.toString();
 
     const expenses = await Expense.find({
@@ -153,98 +82,122 @@ export const getRecentTransactions = async (req, res) => {
       });
     });
 
+    // Cache to store FIFO allocations per friend to avoid redundant calls
+    const fifoCache = {};
+    const getFifoAllocation = (friendId) => {
+      if (fifoCache[friendId]) return fifoCache[friendId];
+
+      const friendExpenses = expenses.filter((e) => {
+        const payerId = e.paidBy?._id ? e.paidBy._id.toString() : e.paidBy?.toString();
+        const hasMe = e.splits.some((s) => (s.user?._id ? s.user._id.toString() : s.user?.toString()) === me);
+        const hasFriend = e.splits.some((s) => (s.user?._id ? s.user._id.toString() : s.user?.toString()) === friendId);
+        return (payerId === me && hasFriend) || (payerId === friendId && hasMe);
+      });
+
+      const friendSettlements = allSettlements.filter((s) => {
+        const fromId = s.from?._id ? s.from._id.toString() : s.from?.toString();
+        const toId = s.to?._id ? s.to._id.toString() : s.to?.toString();
+        return (fromId === me && toId === friendId) || (fromId === friendId && toId === me);
+      });
+
+      const allocationMap = allocateSettlementsFIFO(me, friendId, friendExpenses, friendSettlements);
+      fifoCache[friendId] = allocationMap;
+      return allocationMap;
+    };
+
     const transactions = expenses.map((expense) => {
-      const paidByMe = expense.paidBy._id.toString() === me;
+      const paidByMe = expense.paidBy?._id?.toString() === me;
       const eid = expense._id.toString();
 
       // Helper to resolve user id from populated or plain ObjectId
-      const uid = (s) =>
-        s.user._id ? s.user._id.toString() : s.user.toString();
+      const uid = (s) => {
+        if (!s || !s.user) return null;
+        return s.user._id ? s.user._id.toString() : s.user.toString();
+      };
 
       // Self-expense: only one split belonging to payer (me)
       const isSelfExpense =
         expense.splits.length === 1 && uid(expense.splits[0]) === me;
 
-      // My own split entry
-      const mySplit = expense.splits.find((s) => uid(s) === me);
-
-      // ── Compute amounts ──────────────────────────────────────────
-      let splitAmount, myShare;
+      // ── Compute amounts using centralized FIFO engine ───────────
+      let myShare = 0;
 
       if (isSelfExpense) {
-        splitAmount = expense.totalAmount;
-        myShare = -expense.totalAmount;
+        myShare = 0;
       } else if (paidByMe) {
-        // Use first friend split amount for the "my share" display column
-        const firstFriendSplit = expense.splits.find((s) => uid(s) !== me);
-        splitAmount = firstFriendSplit ? firstFriendSplit.amount : 0;
-        myShare = -splitAmount;
+        // Payer perspective: sum remaining active debts of other participants (outstanding receivables)
+        let totalOthersRemaining = 0;
+        expense.splits.forEach((split) => {
+          const splitUserId = uid(split);
+          if (splitUserId === me) return; // Skip self share
+          if (split.status !== "accepted") return; // Only count accepted shares
+
+          const allocationMap = getFifoAllocation(splitUserId);
+          const allocation = allocationMap[eid];
+          if (allocation) {
+            totalOthersRemaining += allocation.remainingAmount;
+          } else {
+            totalOthersRemaining += split.amount; // Fallback if no allocation
+          }
+        });
+        myShare = totalOthersRemaining;
       } else {
-        splitAmount = mySplit ? mySplit.amount : 0;
-        myShare = splitAmount;
-      }
-
-      // ── Progress counters (payer view) ───────────────────────────
-      let status, acceptedCount, totalFriends, settledFriends;
-
-      if (isSelfExpense) {
-        // For self-expense, check if it's settled globally
-        const isSettled = !!settledByFriend[eid];
-        status = isSettled ? "settled" : "unsettled";
-      } else if (paidByMe) {
-        // All friend splits (exclude payer)
-        const friendSplits = expense.splits.filter((s) => uid(s) !== me);
-        // Non-rejected friend splits
-        const activeFriendSplits = friendSplits.filter(
-          (s) => s.status !== "rejected"
-        );
-        totalFriends = activeFriendSplits.length;
-        acceptedCount = activeFriendSplits.filter(
-          (s) => s.status === "accepted"
-        ).length;
-
-        // Count friends who settled: accepted split + settlement record covering this expense
-        settledFriends = activeFriendSplits.filter((s) => {
-          const fid = uid(s);
-          return (
-            s.status === "accepted" && settledByFriend[eid]?.has(fid)
-          );
-        }).length;
-
-        if (acceptedCount < totalFriends) {
-          // Some friends haven't responded yet
-          status = "awaiting_response";
-        } else if (settledFriends < totalFriends) {
-          // All accepted but not everyone settled
-          status = "pending";
+        // Participant perspective: my remaining unpaid debt (negative outstanding payable)
+        const payerId = expense.paidBy?._id ? expense.paidBy._id.toString() : expense.paidBy.toString();
+        const allocationMap = getFifoAllocation(payerId);
+        const allocation = allocationMap[eid];
+        let remainingDebt = 0;
+        if (allocation) {
+          remainingDebt = allocation.remainingAmount;
         } else {
-          status = "settled";
+          const mySplit = expense.splits.find((s) => uid(s) === me);
+          remainingDebt = mySplit && mySplit.status === "accepted" ? mySplit.amount : 0;
         }
-      } else {
-        // Non-payer: use own split status
-        const splitStatus = mySplit ? mySplit.status : "pending";
-        const mySettled = settledByFriend[eid]?.has(
-          expense.paidBy._id.toString()
-        );
-
-        if (splitStatus === "rejected") status = "rejected";
-        else if (splitStatus === "pending") status = "awaiting";
-        else if (mySettled) status = "settled";
-        else status = "unsettled";
+        myShare = -remainingDebt;
       }
+
+      // ── Historical context amounts (original amounts before settlements) ─
+      // These are used for settled transaction display, e.g. "You lent ₹200 – Settled ✓"
+      // rather than the misleading "You get ₹0.00"
+      let originalLent = 0;   // Total amount payer originally lent to accepted participants
+      let originalOwed = 0;   // Amount this participant originally owed to payer
+
+      if (!isSelfExpense) {
+        if (paidByMe) {
+          // Sum all accepted, non-self split amounts = what was lent to others
+          originalLent = expense.splits.reduce((sum, split) => {
+            const splitUserId = uid(split);
+            if (splitUserId === me) return sum;
+            if (split.status !== "accepted") return sum;
+            return sum + split.amount;
+          }, 0);
+        } else {
+          // My own split amount = what I originally owed
+          const mySplit = expense.splits.find((s) => uid(s) === me);
+          originalOwed = (mySplit && mySplit.status === "accepted") ? mySplit.amount : 0;
+        }
+      }
+
+      // ── Progress counters & Derived overall status ───────────────
+      const settledFriendIds = settledByFriend[eid] || new Set();
+      const { status, acceptedCount, totalFriends, settledFriends } = deriveExpenseStatus(me, expense, settledFriendIds);
 
       const date = new Date(expense.date || expense.createdAt);
 
       return {
         id: expense._id,
         title: expense.description || "Expense",
-        paidBy: paidByMe ? "You" : expense.paidBy.name,
+        paidBy: paidByMe ? "You" : (expense.paidBy?.name || "Unknown"),
         date: date.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
         time: date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        rawTimestamp: date.getTime(), // Added for reliable sorting
         category: expense.category || "other",
         total: expense.totalAmount,
         myShare,
+        originalLent: Number(originalLent.toFixed(2)),   // Historical: total lent to others
+        originalOwed: Number(originalOwed.toFixed(2)),   // Historical: originally owed by me
         status,
+        isSelfExpense,
         // Progress fields (payer-only; undefined for non-payer / self-expense)
         acceptedCount,
         totalFriends,
@@ -252,23 +205,14 @@ export const getRecentTransactions = async (req, res) => {
       };
     });
 
-    // Sort by date manually and then take the top 10
-    transactions.sort((a, b) => {
-      const dateA = new Date(a.date + " " + a.time);
-      const dateB = new Date(b.date + " " + b.time);
-      return dateB - dateA;
-    });
+    // Sort by reliable raw timestamp
+    transactions.sort((a, b) => b.rawTimestamp - a.rawTimestamp);
 
     res.status(200).json(transactions.slice(0, 10));
-  } catch (err) {
-    console.error("Dashboard recent transactions error:", err);
-    res.status(500).json({ message: err.message });
-  }
-};
+});
 
 /* ─── GET /api/dashboard/friend-balances ─────────────────────── */
-export const getFriendBalances = async (req, res) => {
-  try {
+export const getFriendBalances = asyncHandler(async (req, res) => {
     const me = req.user.toString();
 
     const friendships = await Friendship.find({
@@ -277,14 +221,6 @@ export const getFriendBalances = async (req, res) => {
 
     if (friendships.length === 0) return res.status(200).json([]);
 
-    const friendsMap = {};
-    friendships.forEach((f) => {
-      const friend = f.user1._id.toString() === me ? f.user2 : f.user1;
-      friendsMap[friend._id.toString()] = { friend, youOwe: 0, theyOwe: 0 };
-    });
-
-    const settledIds = await buildSettledIds(me);
-
     const expenses = await Expense.find({
       $or: [
         { paidBy: me },
@@ -292,51 +228,36 @@ export const getFriendBalances = async (req, res) => {
       ],
     }).populate("paidBy splits.user", "name _id");
 
-    expenses.forEach((expense) => {
-      if (settledIds.has(expense._id.toString())) return;
-      const paidByMe = expense.paidBy._id.toString() === me;
-      const payerId = expense.paidBy._id.toString();
-
-      expense.splits.forEach((split) => {
-        const uid = split.user._id ? split.user._id.toString() : split.user.toString();
-        if (split.status !== "accepted") return;
-
-        if (paidByMe && uid !== me && friendsMap[uid]) {
-          friendsMap[uid].theyOwe += split.amount;
-        } else if (!paidByMe && uid === me && friendsMap[payerId]) {
-          friendsMap[payerId].youOwe += split.amount;
-        }
-      });
+    const settlements = await Settlement.find({
+      status: "accepted",
+      $or: [{ from: me }, { to: me }],
     });
 
-    const balances = Object.values(friendsMap)
-      .map(({ friend, youOwe, theyOwe }) => ({
+    const ledger = calculateNetBalances(me, friendships, expenses, settlements);
+
+    const balances = ledger
+      .map(({ friend, netBalance }) => ({
         id: friend._id,
         name: friend.name,
         username: friend.username,
-        // positive = they owe you, negative = you owe them
-        balance: Number((theyOwe - youOwe).toFixed(2)),
+        balance: netBalance,
       }))
-      .filter((b) => b.balance !== 0) // only show non-zero
-      .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance)); // biggest first
+      .filter((b) => b.balance !== 0);
+      
+    balances.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance)); // biggest first
 
-    res.status(200).json(balances);
-  } catch (err) {
-    console.error("Dashboard friend balances error:", err);
-    res.status(500).json({ message: err.message });
-  }
-};
+    res.status(200).json(balances.slice(0, 5));
+});
 
 /* ─── GET /api/dashboard/chart-data ─────────────────────────── */
-export const getChartData = async (req, res) => {
-  try {
+export const getChartData = asyncHandler(async (req, res) => {
     const me = req.user.toString();
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const expenses = await Expense.find({
-      createdAt: { $gte: thirtyDaysAgo },
+      date: { $gte: thirtyDaysAgo },
       $or: [
         { paidBy: me },
         { splits: { $elemMatch: { user: me } } },
@@ -385,11 +306,14 @@ export const getChartData = async (req, res) => {
 
       if (myAmount === 0) return;
 
-      // Date label: "D MMM"
+      // Date key: YYYY-MM-DD for reliable sorting
       const d = new Date(expense.date || expense.createdAt);
-      const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const key = `${year}-${month}-${day}`;
 
-      trendMap[label] = (trendMap[label] || 0) + myAmount;
+      trendMap[key] = (trendMap[key] || 0) + myAmount;
 
       const cat = expense.category || "other";
       categoryMap[cat] = (categoryMap[cat] || 0) + myAmount;
@@ -397,22 +321,25 @@ export const getChartData = async (req, res) => {
 
     // Build sorted trend array (chronological)
     const trendEntries = Object.entries(trendMap).sort(
-      ([a], [b]) => new Date(`${a} 2025`) - new Date(`${b} 2025`)
+      ([a], [b]) => new Date(a) - new Date(b)
     );
-    const trend = trendEntries.map(([date, amount]) => ({
-      date,
-      amount: Number(amount.toFixed(2)),
-    }));
+    const trend = trendEntries.map(([dateStr, amount]) => {
+      const d = new Date(dateStr);
+      const formattedDate = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      return {
+        date: formattedDate,
+        amount: Number(amount.toFixed(2)),
+      };
+    });
 
     const categories = Object.entries(categoryMap).map(([name, value]) => ({
       name: name.charAt(0).toUpperCase() + name.slice(1),
       value: Number(value.toFixed(2)),
       color: CATEGORY_COLORS[name] || CATEGORY_COLORS.other,
     }));
+    
+    // Sort so chart starts from oldest in the last 30 days
+    trend.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     res.status(200).json({ trend, categories });
-  } catch (err) {
-    console.error("Dashboard chart data error:", err);
-    res.status(500).json({ message: err.message });
-  }
-};
+});

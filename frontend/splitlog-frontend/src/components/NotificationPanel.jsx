@@ -17,8 +17,9 @@ export default function NotificationPanel() {
     try {
       setLoading(true);
       const res = await api.get("/notifications");
-      setNotifications(res.data.notifications);
-      setUnreadCount(res.data.unreadCount);
+      const notifs = res.data.data || res.data.items || res.data.notifications || [];
+      setNotifications(notifs);
+      setUnreadCount(res.data.unreadCount || 0);
     } catch {
       // silent fail
     } finally {

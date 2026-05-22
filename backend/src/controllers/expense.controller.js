@@ -2,6 +2,7 @@ import Expense from "../models/Expense.model.js";
 import { buildSplits } from "../utils/expense.utils.js";
 import Notification from "../models/Notification.model.js";
 import User from "../models/User.model.js";
+import { deriveExpenseStatus } from "../utils/balanceUtils.js";
 
 export const addExpense = async (req, res) => {
   try {
@@ -117,7 +118,7 @@ export const respondToSplit = async (req, res) => {
     });
   } catch (error) {
     console.error("Respond split error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };
 
@@ -143,7 +144,7 @@ export const editExpense = async (req, res) => {
     const { default: Settlement } = await import("../models/Settlement.model.js");
     const hasSettlement = await Settlement.exists({
       expenses: expenseId,
-      status: "accepted",
+      status: { $in: ["accepted", "pending"] },
     });
 
     if (hasSettlement) {
@@ -205,7 +206,7 @@ export const deleteExpense = async (req, res) => {
     const { default: Settlement } = await import("../models/Settlement.model.js");
     const hasSettlement = await Settlement.exists({
       expenses: expenseId,
-      status: "accepted",
+      status: { $in: ["accepted", "pending"] },
     });
 
     if (hasSettlement) {
@@ -217,12 +218,18 @@ export const deleteExpense = async (req, res) => {
     /* ================= DELETE ================= */
     await Expense.findByIdAndDelete(expenseId);
 
+    // Clean up references to this expense from all settlements (Deleted Expense Safety)
+    await Settlement.updateMany(
+      { expenses: expenseId },
+      { $pull: { expenses: expenseId } }
+    );
+
     res.status(200).json({
       message: "Expense deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting expense:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };
 
@@ -301,26 +308,9 @@ export const getExpenseById = async (req, res) => {
     // Derived progress (for payer view)
     const friendSplits = participants.filter((p) => !p.isPayer);
     const activeFriends = friendSplits.filter((p) => p.responseStatus !== "rejected");
-    const acceptedCount = activeFriends.filter((p) => p.responseStatus === "accepted").length;
-    const totalFriends = activeFriends.length;
-    const settledFriends = activeFriends.filter((p) => p.settlementStatus === "paid").length;
 
-    // Derive overall status
-    let status;
-    if (isSelfExpense) {
-      status = settledFriendIds.size > 0 ? "settled" : "unsettled";
-    } else if (paidByMe) {
-      if (acceptedCount < totalFriends) status = "awaiting_response";
-      else if (settledFriends < totalFriends) status = "pending";
-      else status = "settled";
-    } else {
-      const mySplit = expense.splits.find((s) => s.user._id.toString() === me);
-      const myStatus = mySplit?.status ?? "pending";
-      if (myStatus === "rejected") status = "rejected";
-      else if (myStatus === "pending") status = "awaiting";
-      else if (settledFriendIds.has(payerId)) status = "settled";
-      else status = "unsettled";
-    }
+    // Derive overall status and progress metrics
+    const { status, acceptedCount, totalFriends, settledFriends } = deriveExpenseStatus(me, expense, settledFriendIds);
 
     res.status(200).json({
       id: expense._id,
@@ -345,6 +335,6 @@ export const getExpenseById = async (req, res) => {
     });
   } catch (error) {
     console.error("Get expense by ID error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };
