@@ -1,10 +1,10 @@
 import express from "express";
-import { protect } from "../modules/auth/auth.middleware.js";
+import { protect } from "../auth/auth.middleware.js";
 import {
   createSettlement,
   acceptSettlement,
   rejectSettlement,
-} from "../controllers/settlements.controller.js";
+} from "./settlement.controller.js";
 
 const router = express.Router();
 

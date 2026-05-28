@@ -1,11 +1,11 @@
 import express from "express";
-import { protect } from "../modules/auth/auth.middleware.js";
+import { protect } from "../auth/auth.middleware.js";
 import {
   getSummary,
   getRecentTransactions,
   getFriendBalances,
   getChartData,
-} from "../controllers/dashboard.controller.js";
+} from "./dashboard.controller.js";
 
 const router = express.Router();
 

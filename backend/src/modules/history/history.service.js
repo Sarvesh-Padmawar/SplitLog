@@ -1,28 +1,20 @@
-import Expense from "../models/Expense.model.js";
-import Friendship from "../models/Friendship.model.js";
-import Settlement from "../models/Settlement.model.js"; // Fix: Added missing import
-import { asyncHandler } from "../utils/asyncHandler.js";
-import { ApiError } from "../utils/ApiError.js";
-import { getPaginationParams, buildPaginationMeta, buildPaginatedResponse } from "../utils/pagination.js";
+import Expense from "../../models/Expense.model.js";
+import Friendship from "../../models/Friendship.model.js";
+import Settlement from "../../models/Settlement.model.js";
+import {
+  getPaginationParams,
+  buildPaginationMeta,
+  buildPaginatedResponse,
+} from "../../utils/pagination.js";
+import { ApiError } from "../../utils/ApiError.js";
 
 /**
- * GET /api/history/:friendId
- * 
- * @description
- * Returns a unified chronological activity feed of expenses and settlements shared
- * between the logged-in user and a specific friend. Optimized to eliminate N+1 queries,
- * resolve schema mismatches, and provide robust offset-based pagination.
+ * Fetches unified chronological activity feed of expenses and settlements between me and a specific friend.
  */
-export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
-  const me = req.user.toString();
-  const { friendId } = req.params;
+export const fetchExpenseHistoryWithFriend = async ({ userId, friendId, queryParams }) => {
+  const me = userId.toString();
 
-  // 1️⃣ Verify friend ID exists
-  if (!friendId) {
-    throw new ApiError(400, "Friend ID is required");
-  }
-
-  // 2️⃣ Verify friendship in a single optimized lookup
+  // 1️⃣ Verify friendship in a single lookup
   const isFriend = await Friendship.findOne({
     $or: [
       { user1: me, user2: friendId },
@@ -34,11 +26,10 @@ export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
     throw new ApiError(403, "You are not friends with this user");
   }
 
-  // 3️⃣ Parse and sanitize pagination parameters
-  const { page, limit, skip } = getPaginationParams(req.query);
+  // 2️⃣ Parse pagination parameters
+  const { page, limit, skip } = getPaginationParams(queryParams);
 
-  // 4️⃣ Define precise database queries matching respective schemas
-  // Expenses: only those that involve both users and have been accepted
+  // 3️⃣ Define queries matching respective schemas
   const expenseQuery = {
     $or: [
       { paidBy: me, splits: { $elemMatch: { user: friendId, status: "accepted" } } },
@@ -46,7 +37,6 @@ export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
     ],
   };
 
-  // Settlements: accepted settlements between both users (mapped to from/to schema fields)
   const settlementQuery = {
     $or: [
       { from: me, to: friendId },
@@ -55,7 +45,7 @@ export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
     status: "accepted",
   };
 
-  // 5️⃣ Run document counts in parallel for optimal pagination metadata
+  // 4️⃣ Run counts in parallel
   const [expenseCount, settlementCount] = await Promise.all([
     Expense.countDocuments(expenseQuery),
     Settlement.countDocuments(settlementQuery),
@@ -63,8 +53,7 @@ export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
 
   const totalItems = expenseCount + settlementCount;
 
-  // 6️⃣ Batch fetch recent items up to the required offset limit in parallel
-  // Incorporates pre-population and .lean() for superior read latency
+  // 5️⃣ Batch fetch recent items up to required offset in parallel
   const fetchLimit = skip + limit;
 
   const [expenses, settlements] = await Promise.all([
@@ -81,7 +70,7 @@ export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
       .lean(),
   ]);
 
-  // 7️⃣ Merge into a single chronological activity stream in memory
+  // 6️⃣ Merge and format into single activity feed in memory
   const history = [];
 
   expenses.forEach((expense) => {
@@ -90,7 +79,7 @@ export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
       date: expense.date || expense.createdAt,
       type: "expense",
       description: expense.description || "Expense",
-      amount: expense.totalAmount, // Fix: Use correct schema totalAmount field
+      amount: expense.totalAmount,
       paidBy: expense.paidBy,
       splits: expense.splits,
       category: expense.category || "other",
@@ -104,20 +93,18 @@ export const getExpenseHistoryWithFriend = asyncHandler(async (req, res) => {
       date: settlement.createdAt,
       type: "settlement",
       amount: settlement.amount,
-      from: settlement.from, // Fix: Use correct from/to fields
+      from: settlement.from,
       to: settlement.to,
       createdAt: settlement.createdAt,
     });
   });
 
-  // 8️⃣ Sort the combined activities by date descending
+  // 7️⃣ Sort unified feed descending by date
   history.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // 9️⃣ Extract exact page slice and build paginated envelope
+  // 8️⃣ Extract pagination slice
   const paginatedData = history.slice(skip, skip + limit);
   const meta = buildPaginationMeta(totalItems, page, limit);
 
-  res.status(200).json(buildPaginatedResponse(paginatedData, meta));
-});
-
-
+  return buildPaginatedResponse(paginatedData, meta);
+};
