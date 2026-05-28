@@ -1,4 +1,4 @@
-import Friendship from "../models/Friendship.model.js";
+import Friendship from "../../models/Friendship.model.js";
 
 export const buildSplits = async ({
   paidBy,
