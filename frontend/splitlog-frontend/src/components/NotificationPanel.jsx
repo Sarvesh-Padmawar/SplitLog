@@ -152,8 +152,7 @@ export default function NotificationPanel() {
 
       {/* Dropdown Panel */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[360px] glass-strong rounded-2xl overflow-hidden animate-slideUp z-50 shadow-xl">
-          {/* Header */}
+<div className="absolute right-0 top-full mt-2 w-[360px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden animate-slideUp z-50 shadow-2xl">          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
             <h3 className="text-sm font-semibold text-gray-100">
               Notifications

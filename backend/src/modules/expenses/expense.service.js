@@ -234,7 +234,8 @@ export const removeExpense = async ({ userId, expenseId }) => {
 export const fetchExpenseDetails = async ({ userId, expenseId }) => {
   const expense = await Expense.findById(expenseId)
     .populate("paidBy", "name username _id")
-    .populate("splits.user", "name username _id");
+    .populate("splits.user", "name username _id")
+    .populate("group", "name _id");
 
   if (!expense) {
     const error = new Error("Expense not found");
@@ -327,5 +328,9 @@ export const fetchExpenseDetails = async ({ userId, expenseId }) => {
     totalFriends: paidByMe ? totalFriends : undefined,
     settledFriends: paidByMe ? settledFriends : undefined,
     participants,
+    group: expense.group ? {
+      _id: expense.group._id,
+      name: expense.group.name,
+    } : null,
   };
 };

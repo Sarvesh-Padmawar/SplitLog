@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard/Dashboard";
 import FriendDashboard from "./pages/FriendDashboard/Dashboard";
-import Navbar from "./components/Navbar";
+import Layout from "./components/layout/Layout";
 import Login from "./modules/auth/pages/LoginPage";
 import Signup from "./modules/auth/pages/RegisterPage";
 import VerifyEmail from "./modules/auth/pages/VerifyEmailPage";
@@ -11,6 +11,8 @@ import ResetPassword from "./modules/auth/pages/ResetPasswordPage";
 import CompleteProfile from "./modules/auth/pages/CompleteProfilePage";
 import FriendPage from "./pages/FriendDashboard/FriendPage";
 import ExpenseDetailPage from "./pages/ExpenseDetail/ExpenseDetailPage";
+import GroupsPage from "./features/groups/pages/GroupsPage";
+import GroupDetailsPage from "./features/groups/pages/GroupDetailsPage";
 import ToastContainer from "./components/Toast";
 import { ProtectedRoute } from "./modules/auth/routes/ProtectedRoute";
 import { PublicRoute } from "./modules/auth/routes/PublicRoute";
@@ -33,7 +35,6 @@ function AppRoutes() {
   return (
     <div className="w-full min-h-screen flex flex-col bg-surface-300">
       <ToastContainer />
-      {user && <Navbar />}
 
       <Routes>
         {/* AUTH — redirect to dashboard if already logged in */}
@@ -46,10 +47,16 @@ function AppRoutes() {
 
         {/* PROTECTED ROUTES */}
         <Route path="/complete-profile" element={<ProtectedRoute requireCompleteProfile={false}><CompleteProfile /></ProtectedRoute>} />
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/friends" element={<ProtectedRoute><FriendDashboard /></ProtectedRoute>} />
-        <Route path="/friends/:friendId" element={<ProtectedRoute><FriendPage /></ProtectedRoute>} />
-        <Route path="/expense/:expenseId" element={<ProtectedRoute><ExpenseDetailPage /></ProtectedRoute>} />
+        
+        {/* Protected Dashboard/Friends layout wrapper */}
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/friends" element={<FriendDashboard />} />
+          <Route path="/friends/:friendId" element={<FriendPage />} />
+          <Route path="/groups" element={<GroupsPage />} />
+          <Route path="/groups/:groupId" element={<GroupDetailsPage />} />
+          <Route path="/expense/:expenseId" element={<ExpenseDetailPage />} />
+        </Route>
       </Routes>
     </div>
   );
