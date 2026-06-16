@@ -47,7 +47,7 @@ export default function FriendSummaryPanel({
       : "from-white/[0.04] to-white/[0.02] border-white/[0.08] text-gray-400";
 
   return (
-    <div className="col-span-12 lg:col-span-4 space-y-4 w-[20vw]">
+    <div className="col-span-12 lg:col-span-4 space-y-4 w-full">
 
       {/* Back button */}
       <button

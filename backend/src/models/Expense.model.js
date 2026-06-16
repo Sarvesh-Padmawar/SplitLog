@@ -56,7 +56,12 @@ const expenseSchema = new mongoose.Schema(
   type: String,
   enum: ["food", "travel", "rent", "shopping", "other"],
   default: "other",
-}
+},
+    group: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
+      default: null,
+    }
 
   },
   {
@@ -68,5 +73,6 @@ const expenseSchema = new mongoose.Schema(
 // Compound indexes for optimized query performance and preventing in-memory sorts
 expenseSchema.index({ paidBy: 1, date: -1 });
 expenseSchema.index({ "splits.user": 1, date: -1 });
+expenseSchema.index({ group: 1, date: -1 });
 
 export default mongoose.model("Expense", expenseSchema);

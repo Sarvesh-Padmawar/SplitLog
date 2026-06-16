@@ -150,9 +150,9 @@ export default function RecentTransactions() {
                 </div>
 
                 {/* Title + Meta */}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-gray-100">{exp.title}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-gray-100 truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">{exp.title}</p>
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                         statusStyles[exp.status] || statusStyles.awaiting
@@ -161,15 +161,16 @@ export default function RecentTransactions() {
                       {getStatusLabel(exp)}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
                     Paid by{" "}
                     <span className="font-medium text-gray-400">{exp.paidBy}</span>{" "}
                     • {(exp.category || "other").charAt(0).toUpperCase() + (exp.category || "other").slice(1)}
+                    <span className="inline sm:hidden text-gray-600"> • {new Date(exp.rawTimestamp).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
                   </p>
                 </div>
 
                 {/* Date & Time */}
-                <div className="text-right min-w-[80px]">
+                <div className="hidden sm:block text-right min-w-[80px] flex-shrink-0">
                   <p className="text-xs text-gray-400">
                     {new Date(exp.rawTimestamp).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                   </p>
@@ -179,7 +180,7 @@ export default function RecentTransactions() {
                 </div>
 
                 {/* Amount */}
-                <div className="text-right min-w-[140px]">
+                <div className="text-right min-w-[100px] sm:min-w-[140px] flex-shrink-0">
                   <p className="text-xs text-gray-500">
                     ₹{exp.isSelfExpense ? exp.total.toFixed(2) : Math.abs(exp.myShare).toFixed(2)} / ₹{exp.total}
                   </p>

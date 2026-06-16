@@ -100,30 +100,31 @@ export default function FriendActivityPanel({
                     </div>
 
                     {/* Title + Meta */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-100">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-gray-100 truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">
                           {exp.description || "Expense"}
                         </p>
 
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${badgeClass}`}
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${badgeClass}`}
                         >
                           {badgeLabel}
                         </span>
                       </div>
 
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">
                         Paid by{" "}
                         <span className="font-medium text-gray-400">
                           {paidByMe ? "You" : friend.name}
                         </span>{" "}
                         • {exp.category || "General"}
+                        <span className="inline sm:hidden text-gray-600"> • {new Date(exp.date || exp.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
                       </p>
                     </div>
 
                     {/* Date & Time */}
-                    <div className="text-right min-w-[80px]">
+                    <div className="hidden sm:block text-right min-w-[80px] shrink-0">
                       <p className="text-xs text-gray-400">
                         {new Date(exp.date || exp.createdAt).toLocaleDateString("en-IN", {
                           month: "short",
@@ -139,7 +140,7 @@ export default function FriendActivityPanel({
                     </div>
 
                     {/* Amount */}
-                    <div className="text-right min-w-[140px]">
+                    <div className="text-right min-w-[100px] sm:min-w-[140px] shrink-0">
                       <p className="text-xs text-gray-500">
                         ₹{displayAmount} / ₹{exp.amount}
                       </p>
@@ -213,25 +214,26 @@ export default function FriendActivityPanel({
                       onClick={() => navigate(`/expense/${exp._id}`)}
                       className="group flex items-center gap-4 px-6 py-4 hover:bg-white/[0.03] transition-colors duration-200 cursor-pointer"
                     >
-                      <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.06]">
+                      <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.06] shrink-0">
                         {categoryIconMap[exp.category] || <Utensils className="w-4 h-4 text-gray-500" />}
                       </div>
 
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-100">{exp.description || "Expense"}</p>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-gray-100 truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">{exp.description || "Expense"}</p>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shrink-0">
                             settled
                           </span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">
                           Paid by{" "}
                           <span className="font-medium text-gray-400">{paidByMe ? "You" : friend.name}</span>{" "}
                           • {exp.category || "General"}
+                          <span className="inline sm:hidden text-gray-600"> • {new Date(exp.date || exp.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
                         </p>
                       </div>
 
-                      <div className="text-right min-w-[80px]">
+                      <div className="hidden sm:block text-right min-w-[80px] shrink-0">
                         <p className="text-xs text-gray-400">
                           {new Date(exp.date || exp.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
                         </p>
@@ -240,7 +242,7 @@ export default function FriendActivityPanel({
                         </p>
                       </div>
 
-                      <div className="text-right min-w-[140px]">
+                      <div className="text-right min-w-[100px] sm:min-w-[140px] shrink-0">
                         <p className="text-xs text-gray-500">₹{splitAmount} / ₹{exp.totalAmount || exp.amount}</p>
                         <p className={`text-sm font-semibold ${paidByMe ? "text-emerald-400" : "text-red-400"}`}>
                           {paidByMe ? `Settled ₹${splitAmount}` : `You paid ₹${splitAmount}`}
@@ -262,25 +264,26 @@ export default function FriendActivityPanel({
                       onClick={() => navigate(`/expense/${exp._id}`)}
                       className="group flex items-center gap-4 px-6 py-4 hover:bg-white/[0.03] transition-colors duration-200 cursor-pointer"
                     >
-                      <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.06]">
+                      <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.06] shrink-0">
                         {categoryIconMap[exp.category] || <Utensils className="w-4 h-4 text-gray-500" />}
                       </div>
 
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-100">{exp.description || "Expense"}</p>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-500/15 text-red-400 border border-red-500/20">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-gray-100 truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">{exp.description || "Expense"}</p>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-500/15 text-red-400 border border-red-500/20 shrink-0">
                             rejected
                           </span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">
                           Paid by{" "}
                           <span className="font-medium text-gray-400">{paidByMe ? "You" : friend.name}</span>{" "}
                           • {exp.category || "General"}
+                          <span className="inline sm:hidden text-gray-600"> • {new Date(exp.date || exp.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
                         </p>
                       </div>
 
-                      <div className="text-right min-w-[80px]">
+                      <div className="hidden sm:block text-right min-w-[80px] shrink-0">
                         <p className="text-xs text-gray-400">
                           {new Date(exp.date || exp.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
                         </p>
@@ -289,7 +292,7 @@ export default function FriendActivityPanel({
                         </p>
                       </div>
 
-                      <div className="text-right min-w-[140px]">
+                      <div className="text-right min-w-[100px] sm:min-w-[140px] shrink-0">
                         <p className="text-xs text-gray-500">₹{exp.splitAmount ?? 0} / ₹{exp.amount}</p>
                         <p className="text-sm font-semibold text-gray-600">—</p>
                       </div>

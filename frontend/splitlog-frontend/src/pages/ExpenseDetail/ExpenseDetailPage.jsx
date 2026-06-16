@@ -251,7 +251,7 @@ export default function ExpenseDetailPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 overflow-hidden min-h-0 w-full flex-1">
             {/* ── LEFT COLUMN: Info & Actions ───────────────────────── */}
-            <div className="md:col-span-6 space-y-5 h-full flex flex-col min-h-0 overflow-y-auto no-scrollbar pb-6 pr-1">
+            <div className="md:col-span-6 space-y-5 h-auto md:h-full flex flex-col min-h-0 overflow-y-auto no-scrollbar pb-6 pr-1">
               {/* ── Header card ─────────────────────────────── */}
             <div className="glass rounded-2xl p-6">
               <div className="flex items-start gap-4">
@@ -324,6 +324,19 @@ export default function ExpenseDetailPage() {
                     </p>
                   </div>
                 )}
+                {expense.group && (
+                  <div 
+                    onClick={() => navigate(`/groups/${expense.group._id}`)}
+                    className="bg-white/[0.03] rounded-xl p-3 border border-emerald-500/10 hover:border-emerald-500/30 hover:bg-emerald-500/5 cursor-pointer transition-all duration-200 group"
+                  >
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <Users className="w-3 h-3 text-emerald-400 animate-pulse" /> Group
+                    </p>
+                    <p className="text-sm font-semibold text-emerald-400 mt-0.5 truncate group-hover:underline">
+                      {expense.group.name}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -365,7 +378,7 @@ export default function ExpenseDetailPage() {
             </div>
 
             {/* ── RIGHT COLUMN: Participants & Progress ──────────────── */}
-            <div className="md:col-span-6 space-y-5 h-[72vh] flex flex-col min-h-0 pb-6">
+            <div className="md:col-span-6 space-y-5 h-auto md:h-[72vh] flex flex-col min-h-0 pb-6">
               {/* ── Settlement Progress ──────────────────────── */}
               {settleProgress !== null && expense.totalFriends > 0 && (
                 <div className="glass rounded-2xl p-5 flex-shrink-0">
