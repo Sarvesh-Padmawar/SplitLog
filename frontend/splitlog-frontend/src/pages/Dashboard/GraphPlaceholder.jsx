@@ -12,6 +12,7 @@ import {
   Cell,
 } from "recharts";
 import { fetchChartData } from "../../features/dashboard/services/dashboardService";
+import { useSocket } from "../../services/socket/useSocket";
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -33,12 +34,13 @@ function Skeleton() {
 }
 
 export default function DashboardHistory() {
+  const { socket } = useSocket();
   const [activeTab, setActiveTab] = useState("trend");
   const [trendData, setTrendData] = useState([]);
   const [categoryData, setCategoryData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadChartData = () => {
     fetchChartData()
       .then(({ trend, categories }) => {
         setTrendData(trend);
@@ -46,7 +48,27 @@ export default function DashboardHistory() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadChartData();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("expense_created", loadChartData);
+    socket.on("expense_updated", loadChartData);
+    socket.on("expense_deleted", loadChartData);
+    socket.on("friend_request_accepted", loadChartData);
+
+    return () => {
+      socket.off("expense_created", loadChartData);
+      socket.off("expense_updated", loadChartData);
+      socket.off("expense_deleted", loadChartData);
+      socket.off("friend_request_accepted", loadChartData);
+    };
+  }, [socket]);
 
   const totalExpenses = categoryData.reduce((sum, i) => sum + i.value, 0);
 

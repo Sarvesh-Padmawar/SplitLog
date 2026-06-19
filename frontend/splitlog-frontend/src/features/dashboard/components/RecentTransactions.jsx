@@ -5,6 +5,7 @@ import {
   fetchRecentTransactions,
   fetchFriendBalances,
 } from "../services/dashboardService";
+import { useSocket } from "../../../services/socket/useSocket";
 
 /* ------------------ ICON MAP ------------------ */
 const categoryIconMap = {
@@ -82,6 +83,7 @@ function FriendSkeletonRow() {
 
 /* ------------------ MAIN COMPONENT ------------------ */
 export default function RecentTransactions() {
+  const { socket } = useSocket();
   const navigate = useNavigate();
   const [view, setView] = useState("transactions");
   const [transactions, setTransactions] = useState([]);
@@ -89,7 +91,7 @@ export default function RecentTransactions() {
   const [loadingTx, setLoadingTx] = useState(true);
   const [loadingFriends, setLoadingFriends] = useState(true);
 
-  useEffect(() => {
+  const loadTransactionsAndBalances = () => {
     fetchRecentTransactions()
       .then(setTransactions)
       .catch(console.error)
@@ -99,7 +101,27 @@ export default function RecentTransactions() {
       .then(setFriendBalances)
       .catch(console.error)
       .finally(() => setLoadingFriends(false));
+  };
+
+  useEffect(() => {
+    loadTransactionsAndBalances();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("expense_created", loadTransactionsAndBalances);
+    socket.on("expense_updated", loadTransactionsAndBalances);
+    socket.on("expense_deleted", loadTransactionsAndBalances);
+    socket.on("friend_request_accepted", loadTransactionsAndBalances);
+
+    return () => {
+      socket.off("expense_created", loadTransactionsAndBalances);
+      socket.off("expense_updated", loadTransactionsAndBalances);
+      socket.off("expense_deleted", loadTransactionsAndBalances);
+      socket.off("friend_request_accepted", loadTransactionsAndBalances);
+    };
+  }, [socket]);
 
   return (
     <section className="glass rounded-2xl flex flex-col h-[48vh] animate-slideUp isolate relative z-0 overflow-hidden">

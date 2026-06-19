@@ -1,5 +1,6 @@
 import Notification from "../../models/Notification.model.js";
 import Settlement from "../../models/Settlement.model.js";
+import { socketManager } from "../../socket/socketManager.js";
 import {
   getPaginationParams,
   buildPaginationMeta,
@@ -53,6 +54,9 @@ export const updateNotificationRead = async ({ userId, notificationId }) => {
     throw new ApiError(404, "Notification not found");
   }
 
+  // Emit socket event to the recipient
+  socketManager.sendToUser(userId.toString(), "notification_read", { notificationId });
+
   return notification;
 };
 
@@ -64,6 +68,9 @@ export const updateAllNotificationsRead = async ({ userId }) => {
     { recipient: userId, read: false },
     { read: true }
   );
+
+  // Emit socket event to the user
+  socketManager.sendToUser(userId.toString(), "notification_all_read");
 
   return { success: true };
 };
@@ -109,6 +116,22 @@ export const processSettlementResponse = async ({ userId, notificationId, status
   // Mark notification as read
   notification.read = true;
   await notification.save();
+
+  // Emit socket event to the recipient that notification was read/responded
+  socketManager.sendToUser(userId.toString(), "notification_read", { notificationId });
+
+  // If this is a group settlement, notify the group room about the update (balances changed)
+  if (settlement.group) {
+    try {
+      const { default: Group } = await import("../../models/Group.model.js");
+      const group = await Group.findOne({ _id: settlement.group, isActive: true }).populate("members", "name username email");
+      if (group) {
+        socketManager.sendToRoom(`group:${settlement.group}`, "group_updated", group);
+      }
+    } catch (err) {
+      console.error("[NotificationService] Failed to emit group_updated on settlement response:", err);
+    }
+  }
 
   return settlement;
 };

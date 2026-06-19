@@ -3,6 +3,7 @@ import Notification from "../../models/Notification.model.js";
 import User from "../../models/User.model.js";
 import { buildSplits } from "./expense.utils.js";
 import { deriveExpenseStatus } from "../../utils/balanceUtils.js";
+import { socketManager } from "../../socket/socketManager.js";
 
 /**
  * Creates a new expense, generates splits, and dispatches notifications.
@@ -59,6 +60,12 @@ export const createExpense = async ({
   } catch (emailErr) {
     console.error("Failed to send expense notifications:", emailErr.message);
   }
+
+  // Emit real-time socket events
+  const participants = new Set([paidBy.toString(), ...finalSplits.map((s) => s.user.toString())]);
+  participants.forEach((uid) => {
+    socketManager.sendToUser(uid, "expense_created", expense);
+  });
 
   return expense;
 };
@@ -120,6 +127,16 @@ export const respondToExpenseSplit = async ({ userId, expenseId, status }) => {
     }
   }
 
+  // Emit real-time socket events to all participants/members
+  if (expense.group) {
+    socketManager.sendToRoom(`group:${expense.group}`, "expense_updated", expense);
+  } else {
+    const participants = new Set([expense.paidBy.toString(), ...expense.splits.map((s) => s.user.toString())]);
+    participants.forEach((uid) => {
+      socketManager.sendToUser(uid, "expense_updated", expense);
+    });
+  }
+
   return expense;
 };
 
@@ -169,11 +186,84 @@ export const updateExpense = async ({
     throw error;
   }
 
-  const finalSplits = await buildSplits({
-    paidBy,
-    totalAmount,
-    splits,
-  });
+  let finalSplits = [];
+
+  // Group expense edit logic
+  if (expense.group) {
+    const { default: Group } = await import("../../models/Group.model.js");
+    const group = await Group.findOne({ _id: expense.group, isActive: true });
+    if (!group) {
+      const error = new Error("Group not found or has been deleted");
+      error.status = 404;
+      throw error;
+    }
+
+    // Verify editor belongs to the group
+    const editorInGroup = group.members.some((m) => m.toString() === userId.toString());
+    if (!editorInGroup) {
+      const error = new Error("Access denied. You are not a member of this group");
+      error.status = 403;
+      throw error;
+    }
+
+    // Verify all split users belong to the group
+    for (const split of splits) {
+      const splitUserInGroup = group.members.some((m) => m.toString() === split.user.toString());
+      if (!splitUserInGroup) {
+        const error = new Error(`Split user ${split.user} is not a member of this group`);
+        error.status = 400;
+        throw error;
+      }
+    }
+
+    // Check if the payer is explicitly included in the splits array
+    const payerSplit = splits.find((s) => s.user.toString() === paidBy);
+    if (payerSplit) {
+      // Payer is included: verify that the sum of splits equals the total amount
+      const splitSum = splits.reduce((sum, s) => sum + Number(s.amount), 0);
+      if (Math.abs(splitSum - totalAmount) > 0.01) {
+        const error = new Error(`Sum of splits (₹${splitSum.toFixed(2)}) must equal total amount (₹${totalAmount.toFixed(2)})`);
+        error.status = 400;
+        throw error;
+      }
+      finalSplits = splits.map((s) => {
+        const isPayer = s.user.toString() === paidBy;
+        return {
+          user: s.user,
+          amount: s.amount,
+          status: isPayer ? "accepted" : "pending",
+        };
+      });
+    } else {
+      // Payer is not included: calculate the payer's share as the remainder
+      const splitSum = splits.reduce((sum, s) => sum + Number(s.amount), 0);
+      const payerShare = Number((totalAmount - splitSum).toFixed(2));
+      if (payerShare < 0) {
+        const error = new Error("Split amount exceeds total amount");
+        error.status = 400;
+        throw error;
+      }
+      finalSplits = splits.map((s) => ({
+        user: s.user,
+        amount: s.amount,
+        status: "pending",
+      }));
+      if (payerShare > 0) {
+        finalSplits.push({
+          user: paidBy,
+          amount: payerShare,
+          status: "accepted",
+        });
+      }
+    }
+  } else {
+    // Personal expense edit logic (friend-based validation)
+    finalSplits = await buildSplits({
+      paidBy,
+      totalAmount,
+      splits,
+    });
+  }
 
   expense.totalAmount = totalAmount;
   expense.splits = finalSplits;
@@ -183,6 +273,37 @@ export const updateExpense = async ({
   if (date) expense.date = date;
 
   await expense.save();
+
+  // Dispatch notifications for updated expense
+  try {
+    const editor = await User.findById(userId).select("name");
+    const editorName = editor?.name || "Someone";
+    const notificationPromises = finalSplits
+      .filter((s) => s.user.toString() !== userId.toString())
+      .map((s) =>
+        Notification.create({
+          recipient: s.user,
+          sender: userId,
+          expense: expense._id,
+          type: "expense_updated",
+          message: `${editorName} updated the expense split with you${expense.description ? ` for "${expense.description}"` : ""}`,
+        })
+      );
+    await Promise.all(notificationPromises);
+  } catch (notifErr) {
+    console.error("Failed to send expense update notifications:", notifErr.message);
+  }
+
+  // Emit real-time socket events to all participants/members
+  if (expense.group) {
+    socketManager.sendToRoom(`group:${expense.group}`, "expense_updated", expense);
+  } else {
+    const participants = new Set([expense.paidBy.toString(), ...expense.splits.map((s) => s.user.toString())]);
+    participants.forEach((uid) => {
+      socketManager.sendToUser(uid, "expense_updated", expense);
+    });
+  }
+
   return expense;
 };
 
@@ -204,6 +325,23 @@ export const removeExpense = async ({ userId, expenseId }) => {
     throw error;
   }
 
+  // If the expense belongs to a group, ensure the deleter is a group member
+  if (expense.group) {
+    const { default: Group } = await import("../../models/Group.model.js");
+    const group = await Group.findOne({ _id: expense.group, isActive: true });
+    if (!group) {
+      const error = new Error("Group not found or has been deleted");
+      error.status = 404;
+      throw error;
+    }
+    const isMember = group.members.some((m) => m.toString() === userId.toString());
+    if (!isMember) {
+      const error = new Error("Access denied. You are not a member of this group");
+      error.status = 403;
+      throw error;
+    }
+  }
+
   // Dynamic import to prevent circular dependency lookup chains
   const { default: Settlement } = await import("../../models/Settlement.model.js");
   const hasSettlement = await Settlement.exists({
@@ -215,6 +353,35 @@ export const removeExpense = async ({ userId, expenseId }) => {
     const error = new Error("Cannot delete expense after a settlement has been made");
     error.status = 409;
     throw error;
+  }
+
+  // Dispatch notifications for deleted expense
+  try {
+    const deleter = await User.findById(userId).select("name");
+    const deleterName = deleter?.name || "Someone";
+    const notificationPromises = expense.splits
+      .filter((s) => s.user.toString() !== userId.toString())
+      .map((s) =>
+        Notification.create({
+          recipient: s.user,
+          sender: userId,
+          type: "expense_deleted",
+          message: `${deleterName} deleted the expense: "${expense.description || "Expense"}"`,
+        })
+      );
+    await Promise.all(notificationPromises);
+  } catch (notifErr) {
+    console.error("Failed to send expense delete notifications:", notifErr.message);
+  }
+
+  // Emit real-time socket events to all participants/members before deletion
+  if (expense.group) {
+    socketManager.sendToRoom(`group:${expense.group}`, "expense_deleted", { expenseId: expense._id, group: expense.group });
+  } else {
+    const participants = new Set([expense.paidBy.toString(), ...expense.splits.map((s) => s.user.toString())]);
+    participants.forEach((uid) => {
+      socketManager.sendToUser(uid, "expense_deleted", { expenseId: expense._id, group: expense.group });
+    });
   }
 
   await Expense.findByIdAndDelete(expenseId);

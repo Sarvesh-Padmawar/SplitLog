@@ -18,7 +18,11 @@ import {
   validateRegisterInput,
   validateLoginInput,
   validateProfileCompletion,
-  validateResetPasswordInput
+  validateResetPasswordInput,
+  validateGoogleLoginInput,
+  validateVerifyEmailInput,
+  validateResendVerificationInput,
+  validateForgotPasswordInput
 } from "./auth.validators.js";
 
 import { generateToken } from "./auth.utils.js";
@@ -77,10 +81,12 @@ export const loginUser = async (req, res) => {
 // ── GOOGLE LOGIN ───────────────────────────────────────────────────────────
 export const googleLogin = async (req, res) => {
   try {
-    const { credential } = req.body;
-    if (!credential) {
-      return res.status(400).json({ message: "Google credential is required" });
+    const validation = validateGoogleLoginInput(req.body);
+    if (validation.error) {
+      return res.status(400).json({ message: validation.error });
     }
+
+    const { credential } = req.body;
 
     const payload = await verifyGoogleToken(credential);
     const user = await linkOrCreateGoogleUser({
@@ -169,10 +175,12 @@ export const completeProfile = async (req, res) => {
 // ── VERIFY EMAIL ───────────────────────────────────────────────────────────
 export const verifyEmail = async (req, res) => {
   try {
-    const { token } = req.query;
-    if (!token) {
-      return res.status(400).json({ message: "Verification token is missing." });
+    const validation = validateVerifyEmailInput(req.query);
+    if (validation.error) {
+      return res.status(400).json({ message: validation.error });
     }
+
+    const { token } = req.query;
 
     await verifyEmailToken(token);
 
@@ -192,10 +200,12 @@ export const resendVerificationEmail = async (req, res) => {
   };
 
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ message: "Email is required." });
+    const validation = validateResendVerificationInput(req.body);
+    if (validation.error) {
+      return res.status(400).json({ message: validation.error });
     }
+
+    const { email } = req.body;
 
     await createAndSendVerificationToken(email);
 
@@ -212,10 +222,12 @@ export const forgotPassword = async (req, res) => {
   };
 
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ message: "Email is required." });
+    const validation = validateForgotPasswordInput(req.body);
+    if (validation.error) {
+      return res.status(400).json({ message: validation.error });
     }
+
+    const { email } = req.body;
 
     await createAndSendPasswordResetToken(email);
 

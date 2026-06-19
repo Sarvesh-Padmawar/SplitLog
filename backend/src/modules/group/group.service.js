@@ -1,8 +1,10 @@
+import mongoose from "mongoose";
 import Group from "../../models/Group.model.js";
 import User from "../../models/User.model.js";
 import Expense from "../../models/Expense.model.js";
 import Notification from "../../models/Notification.model.js";
 import { ApiError } from "../../utils/ApiError.js";
+import { socketManager } from "../../socket/socketManager.js";
 
 
 export const createGroup = async (userId, groupData) => {
@@ -14,6 +16,9 @@ export const createGroup = async (userId, groupData) => {
     createdBy: userId,
     members: [userId],
   });
+
+  // Emit real-time socket event
+  socketManager.sendToUser(userId.toString(), "group_created", group);
 
   return group;
 };
@@ -67,6 +72,29 @@ export const updateGroup = async (userId, groupId, updateData) => {
   if (updateData.description !== undefined) group.description = updateData.description;
 
   await group.save();
+
+  // Dispatch notification for group updated
+  try {
+    const updater = await User.findById(userId).select("name");
+    const updaterName = updater?.name || "Someone";
+    const notificationPromises = group.members
+      .filter((m) => m.toString() !== userId.toString())
+      .map((memberId) =>
+        Notification.create({
+          recipient: memberId,
+          sender: userId,
+          type: "group_updated",
+          message: `The group "${group.name}" was updated by ${updaterName}.`,
+        })
+      );
+    await Promise.all(notificationPromises);
+  } catch (notifErr) {
+    console.error("Failed to send group update notifications:", notifErr.message);
+  }
+
+  // Emit real-time socket events
+  socketManager.sendToRoom(`group:${group._id}`, "group_updated", group);
+
   return group;
 };
 
@@ -116,7 +144,31 @@ export const addMember = async (creatorId, groupId, targetUserId) => {
   group.members.push(targetUserId);
   await group.save();
 
+  // Dispatch notification for group added
+  try {
+    const creator = await User.findById(creatorId).select("name");
+    await Notification.create({
+      recipient: targetUserId,
+      sender: creatorId,
+      type: "group_added",
+      message: `${creator?.name || "Someone"} added you to the group "${group.name}".`,
+    });
+  } catch (notifErr) {
+    console.error("Failed to send group added notification:", notifErr.message);
+  }
+
   await group.populate("members", "name username email");
+
+  // Emit real-time socket events
+  // 1. Join the new user's active sockets to the group room in real time
+  socketManager.joinRoom(targetUserId.toString(), `group:${group._id}`);
+
+  // 2. Notify the new user directly that they were added
+  socketManager.sendToUser(targetUserId.toString(), "group_added", group);
+
+  // 3. Notify the room that the group was updated (new member added)
+  socketManager.sendToRoom(`group:${group._id}`, "group_updated", group);
+
   return group;
 };
 
@@ -149,7 +201,31 @@ export const removeMember = async (creatorId, groupId, targetUserId) => {
   );
   await group.save();
 
+  // Dispatch notification for group removed
+  try {
+    const creator = await User.findById(creatorId).select("name");
+    await Notification.create({
+      recipient: targetUserId,
+      sender: creatorId,
+      type: "group_removed",
+      message: `${creator?.name || "Someone"} removed you from the group "${group.name}".`,
+    });
+  } catch (notifErr) {
+    console.error("Failed to send group removed notification:", notifErr.message);
+  }
+
   await group.populate("members", "name username email");
+
+  // Emit real-time socket events
+  // 1. Notify the removed user directly that they were removed
+  socketManager.sendToUser(targetUserId.toString(), "group_removed", { groupId: group._id });
+
+  // 2. Notify the remaining members in the room that the group was updated
+  socketManager.sendToRoom(`group:${group._id}`, "group_updated", group);
+
+  // 3. Remove the target user's active sockets from the group room
+  socketManager.leaveRoom(targetUserId.toString(), `group:${group._id}`);
+
   return group;
 };
 
@@ -231,6 +307,9 @@ export const createGroupExpense = async (paidById, groupId, expenseData) => {
   } catch (notifErr) {
     console.error("Failed to send group expense notifications:", notifErr.message);
   }
+
+  // Emit real-time socket events to all group members via the room
+  socketManager.sendToRoom(`group:${groupId}`, "expense_created", expense);
 
   return expense;
 };
@@ -339,6 +418,22 @@ export const calculateGroupBalances = async (userId, groupId) => {
     }
   }
 
+  // Fetch and incorporate all accepted group-scoped settlements to adjust balances
+  const { default: Settlement } = await import("../../models/Settlement.model.js");
+  const groupSettlements = await Settlement.find({ group: groupId, status: "accepted" });
+
+  for (const settlement of groupSettlements) {
+    const fromId = settlement.from.toString();
+    const toId = settlement.to.toString();
+
+    if (balances[fromId] !== undefined) {
+      balances[fromId] += settlement.amount;
+    }
+    if (balances[toId] !== undefined) {
+      balances[toId] -= settlement.amount;
+    }
+  }
+
   // 6. Split users into creditors and debtors
   const creditors = [];
   const debtors = [];
@@ -417,4 +512,148 @@ export const calculateGroupBalances = async (userId, groupId) => {
     memberBalances,
     settlements,
   };
+};
+
+export const leaveGroup = async (userId, groupId) => {
+  // 1. Fetch group
+  const group = await Group.findOne({ _id: groupId, isActive: true });
+  if (!group) {
+    throw new ApiError(404, "Group not found or has been deleted");
+  }
+
+  // 2. Check membership
+  const isMember = group.members.some((m) => m.toString() === userId.toString());
+  if (!isMember) {
+    throw new ApiError(403, "Access denied. You are not a member of this group");
+  }
+
+  // 3. Creator check: Option A - block entirely
+  if (group.createdBy.toString() === userId.toString()) {
+    throw new ApiError(400, "As the group creator, you cannot leave the group. You must delete or archive it instead.");
+  }
+
+  // 4. Calculate user balance in this group
+  const balancesSummary = await calculateGroupBalances(userId, groupId);
+  const memberBalanceObj = balancesSummary.memberBalances.find(
+    (mb) => mb.user._id.toString() === userId.toString()
+  );
+
+  const balance = memberBalanceObj ? memberBalanceObj.balance : 0;
+  if (balance !== 0) {
+    const direction = balance > 0 ? "are owed" : "owe";
+    const absVal = Math.abs(balance).toFixed(2);
+    throw new ApiError(400, `You cannot leave the group because you have an outstanding balance. You ${direction} ₹${absVal}.`);
+  }
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      // 5. Remove user from group's members array
+      group.members = group.members.filter((m) => m.toString() !== userId.toString());
+      await group.save({ session });
+
+      // 6. Create Notification
+      const leaver = await User.findById(userId).select("name").session(session);
+      const creator = group.createdBy;
+
+      const notification = new Notification({
+        recipient: creator,
+        sender: userId,
+        type: "group_removed",
+        message: `${leaver?.name || "A member"} has voluntarily left the group "${group.name}".`,
+      });
+      await notification.save({ session });
+    });
+
+    // 7. Socket.IO emissions outside transaction
+    // Notify the leaver that they left the group
+    socketManager.sendToUser(userId.toString(), "group_removed", { groupId: group._id });
+
+    // Notify remaining group members that the group was updated
+    socketManager.sendToRoom(`group:${group._id}`, "group_updated", group);
+
+    // Remove the leaver's active sockets from the group room
+    socketManager.leaveRoom(userId.toString(), `group:${group._id}`);
+
+    return { success: true };
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const settleUpGroup = async (fromUserId, groupId, { toUserId, amount }) => {
+  if (!toUserId || !amount || amount <= 0) {
+    throw new ApiError(400, "Invalid settlement data");
+  }
+
+  // 1. Fetch group
+  const group = await Group.findOne({ _id: groupId, isActive: true });
+  if (!group) {
+    throw new ApiError(404, "Group not found or has been deleted");
+  }
+
+  // 2. Check membership
+  const fromMember = group.members.some((m) => m.toString() === fromUserId.toString());
+  const toMember = group.members.some((m) => m.toString() === toUserId.toString());
+  if (!fromMember || !toMember) {
+    throw new ApiError(403, "Access denied. Both users must be members of the group");
+  }
+
+  // 3. Recalculate group recommendations to verify debt
+  const balancesSummary = await calculateGroupBalances(fromUserId, groupId);
+
+  // Find outstanding recommendation from fromUserId to toUserId
+  const recommendation = balancesSummary.settlements.find(
+    (s) => s.from._id.toString() === fromUserId.toString() && s.to._id.toString() === toUserId.toString()
+  );
+
+  if (!recommendation) {
+    throw new ApiError(400, "You do not owe this user according to current group balances");
+  }
+
+  // Float-drift-safe validation: allow partial settlements, but block overpayment
+  const outstandingAmount = recommendation.amount;
+  if (amount > outstandingAmount + 0.01) {
+    throw new ApiError(400, `Settlement amount ₹${amount} exceeds outstanding debt of ₹${outstandingAmount.toFixed(2)}`);
+  }
+
+  const { default: Settlement } = await import("../../models/Settlement.model.js");
+
+  const session = await mongoose.startSession();
+  try {
+    let settlement;
+    await session.withTransaction(async () => {
+      // 4. Create Settlement document (pending verification)
+      settlement = new Settlement({
+        from: fromUserId,
+        to: toUserId,
+        amount,
+        status: "pending",
+        group: groupId,
+      });
+      await settlement.save({ session });
+
+      // 5. Create Notification
+      const sender = await User.findById(fromUserId).select("name").session(session);
+      const senderName = sender?.name || "Someone";
+
+      const notification = new Notification({
+        recipient: toUserId,
+        sender: fromUserId,
+        settlement: settlement._id,
+        type: "settlement_request",
+        message: `${senderName} sent you a group settlement request of ₹${amount} for "${group.name}"`,
+      });
+      await notification.save({ session });
+    });
+
+    // 6. Socket.IO emissions outside transaction
+    if (settlement) {
+      socketManager.sendToUser(toUserId.toString(), "settlement_request", settlement);
+    }
+
+    return settlement;
+  } finally {
+    await session.endSession();
+  }
 };

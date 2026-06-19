@@ -78,4 +78,23 @@ export const groupApi = {
     const response = await api.get(`/groups/${groupId}/balances`);
     return response.data;
   },
+
+  /**
+   * Leave a group.
+   * POST /api/groups/:groupId/leave
+   */
+  leaveGroup: async (groupId) => {
+    const response = await api.post(`/groups/${groupId}/leave`);
+    return response.data;
+  },
+
+  /**
+   * Settle up a debt in a group.
+   * POST /api/groups/:groupId/settle
+   * Body: { toUserId, amount }
+   */
+  settleUpGroup: async (groupId, payload) => {
+    const response = await api.post(`/groups/${groupId}/settle`, payload);
+    return response.data;
+  },
 };

@@ -1,7 +1,9 @@
+import mongoose from "mongoose";
 import User from "../../models/User.model.js";
 import FriendRequest from "../../models/FriendRequest.model.js";
 import Friendship from "../../models/Friendship.model.js";
 import Notification from "../../models/Notification.model.js";
+import { socketManager } from "../../socket/socketManager.js";
 import {
   getPaginationParams,
   buildPaginationMeta,
@@ -57,37 +59,65 @@ export const initiateFriendRequest = async ({ fromUserId, toUserId }) => {
     throw new ApiError(400, "Cannot send request to yourself");
   }
 
-  // Check if already friends
-  const alreadyFriends = await Friendship.findOne({
-    $or: [
-      { user1: fromUserId, user2: toUserId },
-      { user1: toUserId, user2: fromUserId },
-    ],
-  });
+  const session = await mongoose.startSession();
+  try {
+    let request;
+    await session.withTransaction(async () => {
+      // Check if already friends
+      const alreadyFriends = await Friendship.findOne({
+        $or: [
+          { user1: fromUserId, user2: toUserId },
+          { user1: toUserId, user2: fromUserId },
+        ],
+      }).session(session);
 
-  if (alreadyFriends) {
-    throw new ApiError(400, "Already friends");
+      if (alreadyFriends) {
+        throw new ApiError(400, "Already friends");
+      }
+
+      // Check if request already exists (either direction)
+      const requestExists = await FriendRequest.findOne({
+        $or: [
+          { from: fromUserId, to: toUserId },
+          { from: toUserId, to: fromUserId },
+        ],
+        status: "pending",
+      }).session(session);
+
+      if (requestExists) {
+        throw new ApiError(400, "Friend request already exists");
+      }
+
+      request = new FriendRequest({
+        from: fromUserId,
+        to: toUserId,
+      });
+      await request.save({ session });
+
+      // Dispatch notification for friend request received
+      try {
+        const sender = await User.findById(fromUserId).select("name").session(session);
+        const notification = new Notification({
+          recipient: toUserId,
+          sender: fromUserId,
+          type: "friend_request_received",
+          message: `${sender?.name || "Someone"} sent you a friend request.`,
+        });
+        await notification.save({ session });
+      } catch (notifErr) {
+        console.error("Failed to send friend request notification:", notifErr.message);
+      }
+    });
+
+    // Emit real-time socket event (after transaction committed)
+    if (request) {
+      socketManager.sendToUser(toUserId.toString(), "friend_request_received", request);
+    }
+
+    return request;
+  } finally {
+    await session.endSession();
   }
-
-  // Check if request already exists (either direction)
-  const requestExists = await FriendRequest.findOne({
-    $or: [
-      { from: fromUserId, to: toUserId },
-      { from: toUserId, to: fromUserId },
-    ],
-    status: "pending",
-  });
-
-  if (requestExists) {
-    throw new ApiError(400, "Friend request already exists");
-  }
-
-  const request = await FriendRequest.create({
-    from: fromUserId,
-    to: toUserId,
-  });
-
-  return request;
 };
 
 /**
@@ -125,59 +155,99 @@ export const fetchPendingInvitations = async ({ userId, queryParams }) => {
  * Approves a pending friend request and establishes a bidirectional friendship.
  */
 export const approveFriendship = async ({ userId, requestId }) => {
-  const request = await FriendRequest.findOne({
-    _id: requestId,
-    to: userId,
-    status: "pending",
-  });
+  const session = await mongoose.startSession();
+  try {
+    let friendship;
+    let requestFromId;
+    await session.withTransaction(async () => {
+      const request = await FriendRequest.findOne({
+        _id: requestId,
+        to: userId,
+        status: "pending",
+      }).session(session);
 
-  if (!request) {
-    throw new ApiError(404, "Request not found");
+      if (!request) {
+        throw new ApiError(404, "Request not found");
+      }
+
+      requestFromId = request.from;
+
+      // Create Friendship
+      friendship = new Friendship({
+        user1: request.from,
+        user2: userId,
+      });
+      await friendship.save({ session });
+
+      // Delete Request
+      await FriendRequest.findByIdAndDelete(requestId, { session });
+
+      // Dispatch notification for friend request accepted
+      try {
+        const accepter = await User.findById(userId).select("name").session(session);
+        const notification = new Notification({
+          recipient: request.from,
+          sender: userId,
+          type: "friend_request_accepted",
+          message: `${accepter?.name || "Someone"} accepted your friend request.`,
+        });
+        await notification.save({ session });
+      } catch (notifErr) {
+        console.error("Failed to send friend request acceptance notification:", notifErr.message);
+      }
+    });
+
+    // Emit real-time socket events to both users
+    if (friendship && requestFromId) {
+      socketManager.sendToUser(requestFromId.toString(), "friend_request_accepted", friendship);
+      socketManager.sendToUser(userId.toString(), "friend_request_accepted", friendship);
+    }
+
+    return friendship;
+  } finally {
+    await session.endSession();
   }
-
-  // Create Friendship
-  const friendship = await Friendship.create({
-    user1: request.from,
-    user2: userId,
-  });
-
-  // Delete Request
-  await FriendRequest.findByIdAndDelete(requestId);
-
-  return friendship;
 };
 
 /**
  * Declines a pending friend request and dispatches a rejection notification.
  */
 export const declineFriendship = async ({ userId, requestId }) => {
-  const request = await FriendRequest.findOne({
-    _id: requestId,
-    to: userId,
-    status: "pending",
-  });
-
-  if (!request) {
-    throw new ApiError(404, "Request not found");
-  }
-
-  // Delete Request
-  await FriendRequest.findByIdAndDelete(requestId);
-
-  // Dispatch rejection notification
+  const session = await mongoose.startSession();
   try {
-    const rejecter = await User.findById(userId).select("name");
-    await Notification.create({
-      recipient: request.from,
-      sender: userId,
-      type: "friend_rejected",
-      message: `${rejecter?.name || "Someone"} rejected your friend request.`,
-    });
-  } catch (notifErr) {
-    console.error("Failed to send friend rejection notification:", notifErr.message);
-  }
+    await session.withTransaction(async () => {
+      const request = await FriendRequest.findOne({
+        _id: requestId,
+        to: userId,
+        status: "pending",
+      }).session(session);
 
-  return { success: true };
+      if (!request) {
+        throw new ApiError(404, "Request not found");
+      }
+
+      // Delete Request
+      await FriendRequest.findByIdAndDelete(requestId, { session });
+
+      // Dispatch rejection notification
+      try {
+        const rejecter = await User.findById(userId).select("name").session(session);
+        const notification = new Notification({
+          recipient: request.from,
+          sender: userId,
+          type: "friend_rejected",
+          message: `${rejecter?.name || "Someone"} rejected your friend request.`,
+        });
+        await notification.save({ session });
+      } catch (notifErr) {
+        console.error("Failed to send friend rejection notification:", notifErr.message);
+      }
+    });
+
+    return { success: true };
+  } finally {
+    await session.endSession();
+  }
 };
 
 /**

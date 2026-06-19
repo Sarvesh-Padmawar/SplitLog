@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { Bell, Check, X, Clock, ChevronDown, ArrowLeftRight } from "lucide-react";
 import api from "../shared/services/axios";
 import { showToast } from "./toastStore";
+import { useSocket } from "../services/socket/useSocket";
 
 /* ──────────── NOTIFICATION PANEL ──────────── */
 export default function NotificationPanel() {
+  const { socket } = useSocket();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -26,6 +28,21 @@ export default function NotificationPanel() {
       setLoading(false);
     }
   };
+
+  /* Listen to real-time notification socket events */
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("notification_created", fetchNotifications);
+    socket.on("notification_read", fetchNotifications);
+    socket.on("notification_all_read", fetchNotifications);
+
+    return () => {
+      socket.off("notification_created", fetchNotifications);
+      socket.off("notification_read", fetchNotifications);
+      socket.off("notification_all_read", fetchNotifications);
+    };
+  }, [socket]);
 
   /* Fetch on mount + every 30s */
   useEffect(() => {
@@ -122,6 +139,41 @@ export default function NotificationPanel() {
     }
   };
 
+  /* ========= MARK INDIVIDUAL AS READ ========= */
+  const handleMarkRead = async (notification) => {
+    try {
+      setActionLoadingId(notification._id);
+      await api.patch(`/notifications/${notification._id}/read`);
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n._id === notification._id ? { ...n, read: true } : n
+        )
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch {
+      // silent
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  /* ========= MARK ALL AS READ ========= */
+  const handleMarkAllRead = async () => {
+    try {
+      setLoading(true);
+      await api.patch("/notifications/read-all");
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, read: true }))
+      );
+      setUnreadCount(0);
+      showToast("All notifications marked as read", "success");
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  };
+
   /* ========= TIME AGO ========= */
   const timeAgo = (dateStr) => {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -152,12 +204,20 @@ export default function NotificationPanel() {
 
       {/* Dropdown Panel */}
       {open && (
-<div className="absolute right-0 top-full mt-2 w-[360px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden animate-slideUp z-50 shadow-2xl">          {/* Header */}
+        <div className="absolute right-0 top-full mt-2 w-[360px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden animate-slideUp z-50 shadow-2xl">
+          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
             <h3 className="text-sm font-semibold text-gray-100">
               Notifications
             </h3>
-            
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-medium transition"
+              >
+                Mark all as read
+              </button>
+            )}
           </div>
 
           {/* List */}
@@ -180,6 +240,7 @@ export default function NotificationPanel() {
                   onRespond={handleRespond}
                   onSettlementRespond={handleSettlementRespond}
                   onFriendRejectedOk={handleFriendRejectedOk}
+                  onMarkRead={handleMarkRead}
                   timeAgo={timeAgo}
                 />
               ))
@@ -192,7 +253,7 @@ export default function NotificationPanel() {
 }
 
 /* ──────────── SINGLE NOTIFICATION ITEM ──────────── */
-function NotificationItem({ notification, actionLoadingId, onRespond, onSettlementRespond, onFriendRejectedOk, timeAgo }) {
+function NotificationItem({ notification, actionLoadingId, onRespond, onSettlementRespond, onFriendRejectedOk, onMarkRead, timeAgo }) {
   const n = notification;
   const senderName = n.sender?.name || "Someone";
   const senderInitial = senderName[0]?.toUpperCase() || "?";
@@ -280,8 +341,8 @@ function NotificationItem({ notification, actionLoadingId, onRespond, onSettleme
             </div>
           )}
 
-          {/* OK only — info notifications (split rejected, friend rejected) */}
-          {(n.type === "split_request_rejected" || n.type === "friend_rejected") && !n.read && !responded && (
+          {/* OK only — info notifications (any non-actionable unread notification) */}
+          {n.type !== "split_request_pending" && n.type !== "settlement_request" && !n.read && !responded && (
             <div className="flex gap-2 mt-2.5">
               <button
                 onClick={() => onFriendRejectedOk(n)}
@@ -303,6 +364,18 @@ function NotificationItem({ notification, actionLoadingId, onRespond, onSettleme
             </p>
           )}
         </div>
+
+        {/* Mark as read check icon */}
+        {!n.read && (
+          <button
+            onClick={() => onMarkRead(n)}
+            disabled={isLoading}
+            className="p-1 rounded-lg text-gray-500 hover:text-emerald-400 hover:bg-white/[0.05] transition self-start shrink-0"
+            title="Mark as read"
+          >
+            <Check className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );

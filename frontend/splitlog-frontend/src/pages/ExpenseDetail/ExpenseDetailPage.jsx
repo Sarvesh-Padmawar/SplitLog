@@ -21,6 +21,7 @@ import {
 import api from "../../shared/services/axios";
 import { showToast } from "../../components/toastStore";
 import AddExpenseModal from "../../features/expenses/components/AddExpenseModal";
+import { useSocket } from "../../services/socket/useSocket";
 
 /* ── Category icon map ─────────────────────────────────────── */
 const categoryIconMap = {
@@ -169,6 +170,7 @@ function Skeleton() {
 
 /* ── Main page ─────────────────────────────────────────────── */
 export default function ExpenseDetailPage() {
+  const { socket } = useSocket();
   const { expenseId } = useParams();
   const navigate = useNavigate();
 
@@ -193,6 +195,33 @@ export default function ExpenseDetailPage() {
     fetchExpense();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenseId]);
+
+  useEffect(() => {
+    if (!socket || !expenseId) return;
+
+    const handleExpenseUpdated = (updatedExpense) => {
+      const updatedId = updatedExpense?._id || updatedExpense?.id || updatedExpense;
+      if (updatedId?.toString() === expenseId.toString()) {
+        fetchExpense();
+      }
+    };
+
+    const handleExpenseDeleted = (payload) => {
+      const deletedId = payload?.expenseId || payload?.id || payload;
+      if (deletedId?.toString() === expenseId.toString()) {
+        showToast("This expense has been deleted.", "info");
+        navigate(-1);
+      }
+    };
+
+    socket.on("expense_updated", handleExpenseUpdated);
+    socket.on("expense_deleted", handleExpenseDeleted);
+
+    return () => {
+      socket.off("expense_updated", handleExpenseUpdated);
+      socket.off("expense_deleted", handleExpenseDeleted);
+    };
+  }, [socket, expenseId, navigate]);
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this expense? This cannot be undone.")) return;

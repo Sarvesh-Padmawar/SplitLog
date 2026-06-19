@@ -3,8 +3,10 @@ import api from "../../shared/services/axios";
 import DashboardLeft from "./DashbordLeft";
 import DashboardRight from "./DashboardRight";
 import { extractData } from "../../shared/utils/apiHelper";
+import { useSocket } from "../../services/socket/useSocket";
 
 export default function FriendsDashboard() {
+  const { socket } = useSocket();
   const [friends, setFriends] = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [mode, setMode] = useState("pending");
@@ -49,6 +51,26 @@ export default function FriendsDashboard() {
   useEffect(() => {
     fetchFriends();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("friend_request_received", fetchFriends);
+    socket.on("friend_request_accepted", fetchFriends);
+    socket.on("friend_removed", fetchFriends);
+    socket.on("expense_created", fetchFriends);
+    socket.on("expense_updated", fetchFriends);
+    socket.on("expense_deleted", fetchFriends);
+
+    return () => {
+      socket.off("friend_request_received", fetchFriends);
+      socket.off("friend_request_accepted", fetchFriends);
+      socket.off("friend_removed", fetchFriends);
+      socket.off("expense_created", fetchFriends);
+      socket.off("expense_updated", fetchFriends);
+      socket.off("expense_deleted", fetchFriends);
+    };
+  }, [socket]);
 
   return (
     <div className="grid grid-cols-12 gap-6 px-6 lg:px-16 py-6 max-w-7xl mx-auto animate-fadeIn isolate ">

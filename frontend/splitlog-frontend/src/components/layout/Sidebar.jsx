@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Wallet, Users, LogOut, LayoutDashboard, Folder } from "lucide-react";
+import { Wallet, Users, LogOut, LayoutDashboard, Folder, Settings } from "lucide-react";
 import { useAuth } from "../../modules/auth/hooks/useAuth";
 
 export default function Sidebar({ className }) {
@@ -32,6 +32,7 @@ export default function Sidebar({ className }) {
         <SidebarNavItem to="/" icon={<LayoutDashboard />} label="Dashboard" end />
         <SidebarNavItem to="/friends" icon={<Users />} label="Friends" />
         <SidebarNavItem to="/groups" icon={<Folder />} label="Groups" />
+        <SidebarNavItem to="/settings" icon={<Settings />} label="Settings" />
       </nav>
 
       {/* User Footer Account details */}

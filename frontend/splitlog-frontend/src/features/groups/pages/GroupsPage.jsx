@@ -4,12 +4,14 @@ import { useGroups } from "../hooks/useGroups";
 import GroupCard from "../components/GroupCard";
 import CreateGroupModal from "../components/CreateGroupModal";
 import { SkeletonCard } from "../../../components/Skeleton";
+import { useSocket } from "../../../services/socket/useSocket";
 
 /**
  * GroupsPage Component
  * Main page view that lists all groups and allows opening the create group modal.
  */
 export default function GroupsPage() {
+  const { socket } = useSocket();
   const { groups, loading, error, fetchGroups, createGroup, actionLoading } = useGroups();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -17,6 +19,23 @@ export default function GroupsPage() {
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
+
+  // Listen for group update socket events
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("group_created", fetchGroups);
+    socket.on("group_added", fetchGroups);
+    socket.on("group_removed", fetchGroups);
+    socket.on("group_updated", fetchGroups);
+
+    return () => {
+      socket.off("group_created", fetchGroups);
+      socket.off("group_added", fetchGroups);
+      socket.off("group_removed", fetchGroups);
+      socket.off("group_updated", fetchGroups);
+    };
+  }, [socket, fetchGroups]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 lg:px-16 py-8 animate-fadeIn">

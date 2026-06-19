@@ -45,7 +45,10 @@ export default function Topbar({ onMenuClick }) {
         <NotificationPanel />
 
         {/* User profile bubble */}
-        <div className="flex items-center gap-3">
+        <div 
+          onClick={() => navigate("/settings")}
+          className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all duration-200"
+        >
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs font-semibold border border-emerald-500/20 shadow-sm">
             {user?.name?.[0]?.toUpperCase() || "U"}
           </div>

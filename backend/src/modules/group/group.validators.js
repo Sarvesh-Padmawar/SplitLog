@@ -115,3 +115,44 @@ export const validateCreateGroupExpense = (data) => {
   }
   return { error: null, value };
 };
+
+/**
+ * Validates route parameters containing groupId.
+ */
+export const validateGroupId = (data) => {
+  const schema = Joi.object({
+    groupId: Joi.string().custom(objectId).required().messages({
+      "string.empty": "Group ID is required",
+      "any.required": "Group ID is required",
+    }),
+  });
+
+  const { error, value } = schema.validate(data);
+  if (error) {
+    return { error: error.details[0].message };
+  }
+  return { error: null, value };
+};
+
+/**
+ * Validates settle-up request body inside a group.
+ */
+export const validateGroupSettleUp = (data) => {
+  const schema = Joi.object({
+    toUserId: Joi.string().custom(objectId).required().messages({
+      "string.empty": "Creditor user ID is required",
+      "any.required": "Creditor user ID is required",
+    }),
+    amount: Joi.number().positive().required().messages({
+      "number.base": "Settlement amount must be a number",
+      "number.positive": "Settlement amount must be greater than zero",
+      "any.required": "Settlement amount is required",
+    }),
+  });
+
+  const { error, value } = schema.validate(data);
+  if (error) {
+    return { error: error.details[0].message };
+  }
+  return { error: null, value };
+};

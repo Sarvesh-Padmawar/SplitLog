@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Wallet, Users, LogOut, LayoutDashboard, X, Folder } from "lucide-react";
+import { Wallet, Users, LogOut, LayoutDashboard, X, Folder, Settings } from "lucide-react";
 import { useAuth } from "../../modules/auth/hooks/useAuth";
 
 export default function MobileSidebar({ isOpen, onClose }) {
@@ -62,6 +62,7 @@ export default function MobileSidebar({ isOpen, onClose }) {
           <MobileSidebarNavItem to="/" icon={<LayoutDashboard />} label="Dashboard" end />
           <MobileSidebarNavItem to="/friends" icon={<Users />} label="Friends" />
           <MobileSidebarNavItem to="/groups" icon={<Folder />} label="Groups" />
+          <MobileSidebarNavItem to="/settings" icon={<Settings />} label="Settings" />
         </nav>
 
         {/* User profile footer */}

@@ -40,5 +40,6 @@ const groupSchema = new mongoose.Schema(
 
 groupSchema.index({ members: 1 });
 groupSchema.index({ createdBy: 1 });
+groupSchema.index({ isActive: 1, members: 1, createdAt: -1 });
 
 export default mongoose.model("Group", groupSchema);
