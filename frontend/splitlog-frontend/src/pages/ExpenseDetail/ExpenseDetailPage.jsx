@@ -92,9 +92,17 @@ function ParticipantRow({ p }) {
   return (
     <div className="flex items-center gap-4 py-3 border-b border-white/[0.05] last:border-0">
       {/* Avatar */}
-      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-center justify-center text-sm font-semibold text-emerald-400 flex-shrink-0 border border-emerald-500/20">
-        {p.name?.[0]?.toUpperCase() ?? "?"}
-      </div>
+      {p.avatar?.url ? (
+        <img
+          src={p.avatar.url}
+          alt={p.name}
+          className="w-9 h-9 rounded-full object-cover border border-emerald-500/20 flex-shrink-0"
+        />
+      ) : (
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-center justify-center text-sm font-semibold text-emerald-400 flex-shrink-0 border border-emerald-500/20">
+          {p.name?.[0]?.toUpperCase() ?? "?"}
+        </div>
+      )}
 
       {/* Name + badges */}
       <div className="flex-1 min-w-0">

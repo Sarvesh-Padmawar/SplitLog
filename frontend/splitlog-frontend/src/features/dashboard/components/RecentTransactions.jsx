@@ -259,9 +259,17 @@ export default function RecentTransactions() {
                 className="flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors duration-200 cursor-pointer hover:ring-1 hover:ring-emerald-500/20 rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-400 font-semibold text-sm flex items-center justify-center border border-emerald-500/20">
-                    {f.name[0].toUpperCase()}
-                  </div>
+                  {f.avatar?.url ? (
+                    <img
+                      src={f.avatar.url}
+                      alt={f.name}
+                      className="w-9 h-9 rounded-full object-cover border border-emerald-500/20 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-400 font-semibold text-sm flex items-center justify-center border border-emerald-500/20 animate-fadeIn">
+                      {f.name[0].toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <p className="font-medium text-gray-100">{f.name}</p>
                     <p className="text-xs text-gray-500">

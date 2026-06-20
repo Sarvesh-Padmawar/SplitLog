@@ -41,9 +41,17 @@ export default function FriendCard({ friend }) {
     >
       {/* ---------- HEADER ---------- */}
       <div className="flex gap-3 items-center">
-        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-semibold text-base shadow-glow">
-          {name?.[0]}
-        </div>
+        {friend.avatar?.url ? (
+          <img
+            src={friend.avatar.url}
+            alt={name}
+            className="w-11 h-11 rounded-full object-cover border border-emerald-500/20 shadow-sm"
+          />
+        ) : (
+          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-semibold text-base shadow-glow">
+            {name?.[0]}
+          </div>
+        )}
 
         <div>
           <p className="font-semibold text-gray-100">{name}</p>

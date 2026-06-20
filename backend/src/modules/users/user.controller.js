@@ -36,3 +36,19 @@ export const updatePassword = asyncHandler(async (req, res) => {
     message: "Password updated successfully.",
   });
 });
+
+/**
+ * Controller endpoint to upload/update the user's avatar.
+ */
+export const uploadAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError(400, "Please upload an avatar image file.");
+  }
+
+  const updatedUser = await userService.updateAvatar(req.user, req.file.buffer);
+
+  return res.status(200).json({
+    message: "Profile picture updated successfully.",
+    user: updatedUser,
+  });
+});

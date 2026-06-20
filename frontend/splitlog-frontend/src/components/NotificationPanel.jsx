@@ -271,13 +271,21 @@ function NotificationItem({ notification, actionLoadingId, onRespond, onSettleme
     >
       <div className="flex gap-3">
         {/* Avatar */}
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 border ${
-          isSettlement
-            ? "bg-gradient-to-br from-violet-500/30 to-purple-500/30 text-violet-400 border-violet-500/20"
-            : "bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-400 border-emerald-500/20"
-        }`}>
-          {isSettlement ? <ArrowLeftRight className="w-4 h-4" /> : senderInitial}
-        </div>
+        {n.sender?.avatar?.url ? (
+          <img
+            src={n.sender.avatar.url}
+            alt={senderName}
+            className="w-9 h-9 rounded-full object-cover border border-emerald-500/20 shrink-0 shadow-sm"
+          />
+        ) : (
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0 border ${
+            isSettlement
+              ? "bg-gradient-to-br from-violet-500/30 to-purple-500/30 text-violet-400 border-violet-500/20"
+              : "bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-400 border-emerald-500/20"
+          }`}>
+            {isSettlement ? <ArrowLeftRight className="w-4 h-4" /> : senderInitial}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 min-w-0">

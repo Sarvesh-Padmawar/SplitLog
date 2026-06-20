@@ -263,8 +263,8 @@ export const fetchFriendsList = async ({ userId, queryParams }) => {
   const totalItems = await Friendship.countDocuments(query);
 
   const friendships = await Friendship.find(query)
-    .populate("user1", "name username email")
-    .populate("user2", "name username email")
+    .populate("user1", "name username email avatar")
+    .populate("user2", "name username email avatar")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);

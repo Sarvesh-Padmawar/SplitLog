@@ -19,7 +19,7 @@ export const fetchNotificationsList = async ({ userId, queryParams }) => {
   const totalItems = await Notification.countDocuments(query);
 
   const notifications = await Notification.find(query)
-    .populate("sender", "name username")
+    .populate("sender", "name username avatar")
     .populate("expense", "totalAmount description category")
     .populate("settlement", "amount status from to")
     .sort({ createdAt: -1 })

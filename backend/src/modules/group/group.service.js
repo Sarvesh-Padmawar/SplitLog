@@ -40,7 +40,7 @@ export const getGroupDetails = async (userId, groupId) => {
   const group = await Group.findOne({
     _id: groupId,
     isActive: true,
-  }).populate("members", "name username email");
+  }).populate("members", "name username email avatar");
 
   if (!group) {
     throw new ApiError(404, "Group not found or has been deleted");
@@ -157,7 +157,7 @@ export const addMember = async (creatorId, groupId, targetUserId) => {
     console.error("Failed to send group added notification:", notifErr.message);
   }
 
-  await group.populate("members", "name username email");
+  await group.populate("members", "name username email avatar");
 
   // Emit real-time socket events
   // 1. Join the new user's active sockets to the group room in real time
@@ -214,7 +214,7 @@ export const removeMember = async (creatorId, groupId, targetUserId) => {
     console.error("Failed to send group removed notification:", notifErr.message);
   }
 
-  await group.populate("members", "name username email");
+  await group.populate("members", "name username email avatar");
 
   // Emit real-time socket events
   // 1. Notify the removed user directly that they were removed
@@ -334,8 +334,8 @@ export const getGroupExpenses = async (userId, groupId) => {
   // 2. Return populated group expenses
   const expenses = await Expense.find({ group: groupId, isActive: { $ne: false } })
     .sort({ date: -1, createdAt: -1 })
-    .populate("paidBy", "name username email")
-    .populate("splits.user", "name username email");
+    .populate("paidBy", "name username email avatar")
+    .populate("splits.user", "name username email avatar");
 
   // Map to plain objects and inject currentUserShare and currentUserRole
   const expensesWithPerspective = expenses.map((expense) => {
@@ -374,7 +374,7 @@ export const calculateGroupBalances = async (userId, groupId) => {
   // 2. Fetch group details populated with members
   const group = await Group.findOne({ _id: groupId, isActive: true }).populate(
     "members",
-    "name username email"
+    "name username email avatar"
   );
   if (!group) {
     throw new ApiError(404, "Group not found or has been deleted");

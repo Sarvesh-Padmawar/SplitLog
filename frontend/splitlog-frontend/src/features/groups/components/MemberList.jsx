@@ -32,9 +32,17 @@ export default function MemberList({ members, creatorId, currentUserId, onRemove
               >
                 {/* User avatar and details */}
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/15 flex items-center justify-center text-emerald-400 font-semibold font-brand shrink-0">
-                    {member.name?.[0]?.toUpperCase() || "M"}
-                  </div>
+                  {member.avatar?.url ? (
+                    <img
+                      src={member.avatar.url}
+                      alt={member.name}
+                      className="w-10 h-10 rounded-full object-cover border border-emerald-500/15 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/15 flex items-center justify-center text-emerald-400 font-semibold font-brand shrink-0">
+                      {member.name?.[0]?.toUpperCase() || "M"}
+                    </div>
+                  )}
                   
                   <div className="min-w-0 space-y-0.5">
                     <div className="flex items-center gap-2 flex-wrap">

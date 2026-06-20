@@ -12,7 +12,7 @@ export const getLedger = asyncHandler(async (req, res) => {
     
     const friendships = await Friendship.find({
       $or: [{ user1: me }, { user2: me }],
-    }).populate("user1 user2", "name username");
+    }).populate("user1 user2", "name username avatar");
 
     if (friendships.length === 0) {
       return res.status(200).json([]);
@@ -23,7 +23,7 @@ export const getLedger = asyncHandler(async (req, res) => {
         { paidBy: me },
         { splits: { $elemMatch: { user: me } } },
       ],
-    }).populate("paidBy splits.user", "name username");
+    }).populate("paidBy splits.user", "name username avatar");
 
     // Fetch all accepted settlements
     const settlements = await Settlement.find({
@@ -40,7 +40,7 @@ export const getLedger = asyncHandler(async (req, res) => {
 export const getLedgerWithFriend = asyncHandler(async (req, res) => {
     const me = req.user.toString();
     const { friendId } = req.params;
-    const friend = await User.findById(friendId).select("name username");
+    const friend = await User.findById(friendId).select("name username avatar");
     
     if (!friend) {
       throw new ApiError(404, "Friend not found");
@@ -64,7 +64,7 @@ export const getLedgerWithFriend = asyncHandler(async (req, res) => {
         { paidBy: me, "splits.user": friendId },
         { paidBy: friendId, "splits.user": me },
       ],
-    }).populate("paidBy", "name username").sort({ createdAt: 1 });
+    }).populate("paidBy", "name username avatar").sort({ createdAt: 1 });
 
     // 3️⃣ Fetch settlements (all statuses for display, accepted for balance)
     const settlements = await Settlement.find({

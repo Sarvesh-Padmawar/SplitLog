@@ -69,6 +69,7 @@ export const loginUser = async (req, res) => {
         email: user.email,
         provider: user.provider || "local",
         isProfileComplete: user.isProfileComplete !== false,
+        avatar: user.avatar,
       },
     });
   } catch (error) {
@@ -106,6 +107,7 @@ export const googleLogin = async (req, res) => {
         email: user.email,
         provider: user.provider || (user.googleId ? "google" : "local"),
         isProfileComplete: user.isProfileComplete !== false,
+        avatar: user.avatar,
       },
     });
   } catch (error) {
@@ -137,6 +139,7 @@ export const getMe = async (req, res) => {
       email: user.email,
       provider: user.provider || "local",
       isProfileComplete: user.isProfileComplete !== false,
+      avatar: user.avatar,
     });
   } catch (error) {
     const status = error.status || 500;
@@ -164,6 +167,7 @@ export const completeProfile = async (req, res) => {
         email: user.email,
         provider: user.provider || "local",
         isProfileComplete: user.isProfileComplete !== false,
+        avatar: user.avatar,
       },
     });
   } catch (error) {

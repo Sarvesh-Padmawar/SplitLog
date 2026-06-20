@@ -60,13 +60,13 @@ export const fetchExpenseHistoryWithFriend = async ({ userId, friendId, queryPar
     Expense.find(expenseQuery)
       .sort({ date: -1, createdAt: -1 })
       .limit(fetchLimit)
-      .populate("paidBy", "name username")
-      .populate("splits.user", "name username")
+      .populate("paidBy", "name username avatar")
+      .populate("splits.user", "name username avatar")
       .lean(),
     Settlement.find(settlementQuery)
       .sort({ createdAt: -1 })
       .limit(fetchLimit)
-      .populate("from to", "name username")
+      .populate("from to", "name username avatar")
       .lean(),
   ]);
 

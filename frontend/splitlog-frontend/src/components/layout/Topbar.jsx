@@ -49,9 +49,17 @@ export default function Topbar({ onMenuClick }) {
           onClick={() => navigate("/settings")}
           className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-all duration-200"
         >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs font-semibold border border-emerald-500/20 shadow-sm">
-            {user?.name?.[0]?.toUpperCase() || "U"}
-          </div>
+          {user?.avatar?.url ? (
+            <img
+              src={user.avatar.url}
+              alt={user.name}
+              className="w-8 h-8 rounded-full object-cover border border-emerald-500/20 shadow-sm"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs font-semibold border border-emerald-500/20 shadow-sm">
+              {user?.name?.[0]?.toUpperCase() || "U"}
+            </div>
+          )}
           <span className="hidden sm:inline text-xs font-medium text-gray-300">
             {user?.name || "User"}
           </span>

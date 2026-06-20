@@ -400,8 +400,8 @@ export const removeExpense = async ({ userId, expenseId }) => {
  */
 export const fetchExpenseDetails = async ({ userId, expenseId }) => {
   const expense = await Expense.findById(expenseId)
-    .populate("paidBy", "name username _id")
-    .populate("splits.user", "name username _id")
+    .populate("paidBy", "name username _id avatar")
+    .populate("splits.user", "name username _id avatar")
     .populate("group", "name _id");
 
   if (!expense) {
@@ -464,6 +464,7 @@ export const fetchExpenseDetails = async ({ userId, expenseId }) => {
       userId: uid,
       name: split.user.name,
       username: split.user.username,
+      avatar: split.user.avatar,
       amount: split.amount,
       isPayer,
       isMe,

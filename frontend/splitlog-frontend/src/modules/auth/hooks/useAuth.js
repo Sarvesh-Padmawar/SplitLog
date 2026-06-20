@@ -84,6 +84,7 @@ export function useAuth() {
     googleLogin,
     logout,
     completeProfile,
+    setAuthUser,
     clearError: () => setError(null),
   };
 }

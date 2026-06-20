@@ -196,7 +196,7 @@ export const fetchFriendBalances = async ({ userId }) => {
 
   const friendships = await Friendship.find({
     $or: [{ user1: me }, { user2: me }],
-  }).populate("user1 user2", "name username");
+  }).populate("user1 user2", "name username avatar");
 
   if (friendships.length === 0) return [];
 
@@ -219,6 +219,7 @@ export const fetchFriendBalances = async ({ userId }) => {
       id: friend._id,
       name: friend.name,
       username: friend.username,
+      avatar: friend.avatar,
       balance: netBalance,
     }))
     .filter((b) => b.balance !== 0);
