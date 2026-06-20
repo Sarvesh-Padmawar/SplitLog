@@ -39,8 +39,15 @@ export default function AddExpenseModal({ open, onClose, existingExpense, onSucc
     const fetchFriends = async () => {
       try {
         setLoadingFriends(true);
-        const res = await api.get("/friends");
-        setFriends(extractData(res));
+        const groupId = existingExpense?.group?._id || existingExpense?.group?.id;
+        if (groupId) {
+          const res = await api.get(`/groups/${groupId}`);
+          const groupData = res.data?.data || res.data;
+          setFriends(groupData?.members || []);
+        } else {
+          const res = await api.get("/friends");
+          setFriends(extractData(res));
+        }
       } catch {
         setFriends([]);
       } finally {
@@ -48,7 +55,7 @@ export default function AddExpenseModal({ open, onClose, existingExpense, onSucc
       }
     };
     fetchFriends();
-  }, [open]);
+  }, [open, existingExpense]);
 
   /* ================= RESET ON CLOSE / PREFILL ON EDIT ================= */
   useEffect(() => {

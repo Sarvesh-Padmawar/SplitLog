@@ -21,6 +21,7 @@ import {
 import api from "../../shared/services/axios";
 import { showToast } from "../../components/toastStore";
 import AddExpenseModal from "../../features/expenses/components/AddExpenseModal";
+import { useSocket } from "../../services/socket/useSocket";
 
 /* ── Category icon map ─────────────────────────────────────── */
 const categoryIconMap = {
@@ -91,9 +92,17 @@ function ParticipantRow({ p }) {
   return (
     <div className="flex items-center gap-4 py-3 border-b border-white/[0.05] last:border-0">
       {/* Avatar */}
-      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-center justify-center text-sm font-semibold text-emerald-400 flex-shrink-0 border border-emerald-500/20">
-        {p.name?.[0]?.toUpperCase() ?? "?"}
-      </div>
+      {p.avatar?.url ? (
+        <img
+          src={p.avatar.url}
+          alt={p.name}
+          className="w-9 h-9 rounded-full object-cover border border-emerald-500/20 flex-shrink-0"
+        />
+      ) : (
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-center justify-center text-sm font-semibold text-emerald-400 flex-shrink-0 border border-emerald-500/20">
+          {p.name?.[0]?.toUpperCase() ?? "?"}
+        </div>
+      )}
 
       {/* Name + badges */}
       <div className="flex-1 min-w-0">
@@ -169,6 +178,7 @@ function Skeleton() {
 
 /* ── Main page ─────────────────────────────────────────────── */
 export default function ExpenseDetailPage() {
+  const { socket } = useSocket();
   const { expenseId } = useParams();
   const navigate = useNavigate();
 
@@ -193,6 +203,33 @@ export default function ExpenseDetailPage() {
     fetchExpense();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenseId]);
+
+  useEffect(() => {
+    if (!socket || !expenseId) return;
+
+    const handleExpenseUpdated = (updatedExpense) => {
+      const updatedId = updatedExpense?._id || updatedExpense?.id || updatedExpense;
+      if (updatedId?.toString() === expenseId.toString()) {
+        fetchExpense();
+      }
+    };
+
+    const handleExpenseDeleted = (payload) => {
+      const deletedId = payload?.expenseId || payload?.id || payload;
+      if (deletedId?.toString() === expenseId.toString()) {
+        showToast("This expense has been deleted.", "info");
+        navigate(-1);
+      }
+    };
+
+    socket.on("expense_updated", handleExpenseUpdated);
+    socket.on("expense_deleted", handleExpenseDeleted);
+
+    return () => {
+      socket.off("expense_updated", handleExpenseUpdated);
+      socket.off("expense_deleted", handleExpenseDeleted);
+    };
+  }, [socket, expenseId, navigate]);
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this expense? This cannot be undone.")) return;

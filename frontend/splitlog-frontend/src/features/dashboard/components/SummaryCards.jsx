@@ -7,17 +7,39 @@ import {
   Banknote,
 } from "lucide-react";
 import { fetchSummary } from "../services/dashboardService";
+import { useSocket } from "../../../services/socket/useSocket";
 
 export default function SummaryCards() {
+  const { socket } = useSocket();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadSummary = () => {
     fetchSummary()
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadSummary();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("expense_created", loadSummary);
+    socket.on("expense_updated", loadSummary);
+    socket.on("expense_deleted", loadSummary);
+    socket.on("friend_request_accepted", loadSummary);
+
+    return () => {
+      socket.off("expense_created", loadSummary);
+      socket.off("expense_updated", loadSummary);
+      socket.off("expense_deleted", loadSummary);
+      socket.off("friend_request_accepted", loadSummary);
+    };
+  }, [socket]);
 
   const fmt = (v, showSign = false) => {
     if (v === undefined || v === null) return "—";

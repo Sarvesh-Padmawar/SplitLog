@@ -177,6 +177,42 @@ export function useGroups() {
   };
 
   /**
+   * Leaves a group voluntarily.
+   */
+  const leaveGroup = async (groupId) => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const response = await groupApi.leaveGroup(groupId);
+      return { success: true, message: response.message };
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || "Failed to leave group. Please try again.";
+      setActionError(errorMsg);
+      return { success: false, error: errorMsg };
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /**
+   * Record a settlement payment inside a group.
+   */
+  const settleUpGroup = async (groupId, payload) => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const response = await groupApi.settleUpGroup(groupId, payload);
+      return { success: true, data: response.data };
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || "Failed to record group settlement. Please try again.";
+      setActionError(errorMsg);
+      return { success: false, error: errorMsg };
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /**
    * Fetches the net balances and settlements summary for a group.
    */
   const fetchGroupBalances = useCallback(async (groupId) => {
@@ -228,5 +264,7 @@ export function useGroups() {
     addMember,
     removeMember,
     createGroupExpense,
+    leaveGroup,
+    settleUpGroup,
   };
 }

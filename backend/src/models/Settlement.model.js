@@ -28,6 +28,10 @@ const settlementSchema = new mongoose.Schema(
         ref: "Expense",
       },
     ],
+    group: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
+    },
   },
   { timestamps: true }
 );

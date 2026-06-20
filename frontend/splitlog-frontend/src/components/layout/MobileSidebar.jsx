@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Wallet, Users, LogOut, LayoutDashboard, X, Folder } from "lucide-react";
+import { Wallet, Users, LogOut, LayoutDashboard, X, Folder, Settings } from "lucide-react";
 import { useAuth } from "../../modules/auth/hooks/useAuth";
 
 export default function MobileSidebar({ isOpen, onClose }) {
@@ -62,14 +62,23 @@ export default function MobileSidebar({ isOpen, onClose }) {
           <MobileSidebarNavItem to="/" icon={<LayoutDashboard />} label="Dashboard" end />
           <MobileSidebarNavItem to="/friends" icon={<Users />} label="Friends" />
           <MobileSidebarNavItem to="/groups" icon={<Folder />} label="Groups" />
+          <MobileSidebarNavItem to="/settings" icon={<Settings />} label="Settings" />
         </nav>
 
         {/* User profile footer */}
         <div className="p-4 border-t border-white/[0.06] bg-surface-200/50">
           <div className="flex items-center gap-3 px-2 py-1">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm font-semibold border border-emerald-500/20">
-              {user?.name?.[0]?.toUpperCase() || "U"}
-            </div>
+            {user?.avatar?.url ? (
+              <img
+                src={user.avatar.url}
+                alt={user.name}
+                className="w-9 h-9 rounded-full object-cover border border-emerald-500/20 shadow-sm"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm font-semibold border border-emerald-500/20">
+                {user?.name?.[0]?.toUpperCase() || "U"}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-100 truncate">{user?.name || "User"}</p>
               <p className="text-xs text-gray-500 truncate">{user?.email || ""}</p>

@@ -5,6 +5,7 @@ import {
   fetchRecentTransactions,
   fetchFriendBalances,
 } from "../services/dashboardService";
+import { useSocket } from "../../../services/socket/useSocket";
 
 /* ------------------ ICON MAP ------------------ */
 const categoryIconMap = {
@@ -82,6 +83,7 @@ function FriendSkeletonRow() {
 
 /* ------------------ MAIN COMPONENT ------------------ */
 export default function RecentTransactions() {
+  const { socket } = useSocket();
   const navigate = useNavigate();
   const [view, setView] = useState("transactions");
   const [transactions, setTransactions] = useState([]);
@@ -89,7 +91,7 @@ export default function RecentTransactions() {
   const [loadingTx, setLoadingTx] = useState(true);
   const [loadingFriends, setLoadingFriends] = useState(true);
 
-  useEffect(() => {
+  const loadTransactionsAndBalances = () => {
     fetchRecentTransactions()
       .then(setTransactions)
       .catch(console.error)
@@ -99,7 +101,27 @@ export default function RecentTransactions() {
       .then(setFriendBalances)
       .catch(console.error)
       .finally(() => setLoadingFriends(false));
+  };
+
+  useEffect(() => {
+    loadTransactionsAndBalances();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("expense_created", loadTransactionsAndBalances);
+    socket.on("expense_updated", loadTransactionsAndBalances);
+    socket.on("expense_deleted", loadTransactionsAndBalances);
+    socket.on("friend_request_accepted", loadTransactionsAndBalances);
+
+    return () => {
+      socket.off("expense_created", loadTransactionsAndBalances);
+      socket.off("expense_updated", loadTransactionsAndBalances);
+      socket.off("expense_deleted", loadTransactionsAndBalances);
+      socket.off("friend_request_accepted", loadTransactionsAndBalances);
+    };
+  }, [socket]);
 
   return (
     <section className="glass rounded-2xl flex flex-col h-[48vh] animate-slideUp isolate relative z-0 overflow-hidden">
@@ -237,9 +259,17 @@ export default function RecentTransactions() {
                 className="flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors duration-200 cursor-pointer hover:ring-1 hover:ring-emerald-500/20 rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-400 font-semibold text-sm flex items-center justify-center border border-emerald-500/20">
-                    {f.name[0].toUpperCase()}
-                  </div>
+                  {f.avatar?.url ? (
+                    <img
+                      src={f.avatar.url}
+                      alt={f.name}
+                      className="w-9 h-9 rounded-full object-cover border border-emerald-500/20 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-500/30 text-emerald-400 font-semibold text-sm flex items-center justify-center border border-emerald-500/20 animate-fadeIn">
+                      {f.name[0].toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <p className="font-medium text-gray-100">{f.name}</p>
                     <p className="text-xs text-gray-500">

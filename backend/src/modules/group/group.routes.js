@@ -13,6 +13,8 @@ import {
   createGroupExpense,
   getGroupExpenses,
   getGroupBalances,
+  leaveGroup,
+  settleUpGroup,
 } from "./group.controller.js";
 
 const router = express.Router();
@@ -28,6 +30,7 @@ router.delete("/:groupId/members/:userId", removeMember);
 router.post("/:groupId/expenses", createGroupExpense);
 router.get("/:groupId/expenses", getGroupExpenses);
 router.get("/:groupId/balances", getGroupBalances);
-
+router.post("/:groupId/leave", leaveGroup);
+router.post("/:groupId/settle", settleUpGroup);
 
 export default router;

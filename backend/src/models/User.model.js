@@ -72,6 +72,18 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    
+    // ── Avatar (Cloudinary Upload) ───────────────────────────────────────────
+    avatar: {
+      url: {
+        type: String,
+        default: "",
+      },
+      publicId: {
+        type: String,
+        default: "",
+      },
+    },
   },
   { timestamps: true }
 );

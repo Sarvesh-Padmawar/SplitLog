@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, UserPlus, Folder, Info, AlertTriangle, Shield, Receipt, Plus, DollarSign, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useGroups } from "../hooks/useGroups";
 import { useAuth } from "../../../modules/auth/hooks/useAuth";
+import { useSocket } from "../../../services/socket/useSocket";
+import { showToast } from "../../../components/toastStore";
 import MemberList from "../components/MemberList";
 import AddMemberModal from "../components/AddMemberModal";
 import CreateGroupExpenseModal from "../components/CreateGroupExpenseModal";
@@ -21,6 +23,8 @@ const CATEGORIES = [
  * Shows details of a specific group, listing group expenses, group balances, group members, and owner tools.
  */
 export default function GroupDetailsPage() {
+  const { socket } = useSocket();
+  const navigate = useNavigate();
   const { groupId } = useParams();
   const { user } = useAuth();
   
@@ -43,6 +47,8 @@ export default function GroupDetailsPage() {
     balancesError,
     fetchGroupBalances,
     actionLoading,
+    leaveGroup,
+    settleUpGroup,
   } = useGroups();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -63,6 +69,55 @@ export default function GroupDetailsPage() {
       fetchGroupBalances(groupId).catch(() => {});
     }
   }, [groupId, activeTab, fetchGroupBalances]);
+
+  // Listen to socket events for real-time group and expense sync
+  useEffect(() => {
+    if (!socket || !groupId) return;
+
+    const refreshGroupData = () => {
+      fetchGroupExpenses(groupId).catch(() => {});
+      if (activeTab === "balances") {
+        fetchGroupBalances(groupId).catch(() => {});
+      }
+    };
+
+    const handleGroupUpdated = (updatedGroup) => {
+      const gid = updatedGroup?._id || updatedGroup?.id || updatedGroup;
+      if (gid?.toString() === groupId.toString()) {
+        fetchGroupDetails(groupId).catch(() => {});
+        refreshGroupData();
+      }
+    };
+
+    const handleGroupRemoved = (payload) => {
+      const gid = payload?.groupId || payload?.id || payload;
+      if (gid?.toString() === groupId.toString()) {
+        showToast("You have been removed from this group.", "info");
+        navigate("/groups");
+      }
+    };
+
+    const handleExpenseEvent = (expense) => {
+      const expGroup = expense?.group?._id || expense?.group;
+      if (!expGroup || expGroup.toString() === groupId.toString()) {
+        refreshGroupData();
+      }
+    };
+
+    socket.on("group_updated", handleGroupUpdated);
+    socket.on("group_removed", handleGroupRemoved);
+    socket.on("expense_created", handleExpenseEvent);
+    socket.on("expense_updated", handleExpenseEvent);
+    socket.on("expense_deleted", handleExpenseEvent);
+
+    return () => {
+      socket.off("group_updated", handleGroupUpdated);
+      socket.off("group_removed", handleGroupRemoved);
+      socket.off("expense_created", handleExpenseEvent);
+      socket.off("expense_updated", handleExpenseEvent);
+      socket.off("expense_deleted", handleExpenseEvent);
+    };
+  }, [socket, groupId, activeTab, fetchGroupDetails, fetchGroupExpenses, fetchGroupBalances, navigate]);
 
   if (loadingDetails) {
     return (
@@ -146,6 +201,30 @@ export default function GroupDetailsPage() {
       }
     }
     return res;
+  };
+
+  // Handle leave group action
+  const handleLeaveGroup = async () => {
+    if (!window.confirm("Are you sure you want to leave this group?")) return;
+    const res = await leaveGroup(groupId);
+    if (res.success) {
+      showToast("You have left the group successfully.", "success");
+      navigate("/groups");
+    } else {
+      showToast(res.error || "Failed to leave group.", "error");
+    }
+  };
+
+  // Handle group settle up action
+  const handleSettleUpGroup = async (toUserId, amount, toUserName) => {
+    if (!window.confirm(`Record a payment of ₹${amount.toFixed(2)} to ${toUserName}? This will create a pending verification request.`)) return;
+    const res = await settleUpGroup(groupId, { toUserId, amount });
+    if (res.success) {
+      showToast("Settlement request recorded successfully! Waiting for recipient verification.", "success");
+      fetchGroupBalances(groupId).catch(() => {});
+    } else {
+      showToast(res.error || "Failed to settle up.", "error");
+    }
   };
 
   return (
@@ -416,27 +495,40 @@ export default function GroupDetailsPage() {
                         </div>
                       </div>
                     ) : (
-                      groupSettlements.map((settlement, idx) => (
-                        <div
-                          key={idx}
-                          className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-2 hover:border-emerald-500/10 hover:shadow-glow transition-all duration-200 animate-fadeIn"
-                        >
-                          <div className="flex items-center justify-between text-xs text-gray-400">
-                            <span className="font-semibold text-gray-300 truncate max-w-[100px]">{settlement.from.name}</span>
-                            <span className="flex items-center gap-1 font-bold text-emerald-500 uppercase tracking-wider text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/15 shrink-0">
-                              owes <ArrowRight size={10} />
-                            </span>
-                            <span className="font-semibold text-gray-300 truncate max-w-[100px]">{settlement.to.name}</span>
+                      groupSettlements.map((settlement, idx) => {
+                        const isDebtor = settlement.from._id.toString() === currentUserId.toString();
+                        return (
+                          <div
+                            key={idx}
+                            className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-2 hover:border-emerald-500/10 hover:shadow-glow transition-all duration-200 animate-fadeIn"
+                          >
+                            <div className="flex items-center justify-between text-xs text-gray-400">
+                              <span className="font-semibold text-gray-300 truncate max-w-[100px]">{settlement.from.name}</span>
+                              <span className="flex items-center gap-1 font-bold text-emerald-500 uppercase tracking-wider text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/15 shrink-0">
+                                owes <ArrowRight size={10} />
+                              </span>
+                              <span className="font-semibold text-gray-300 truncate max-w-[100px]">{settlement.to.name}</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center pt-1.5 border-t border-white/[0.02]">
+                              <span className="text-[10px] text-gray-500 uppercase font-semibold">Amount to Pay</span>
+                              <span className="text-sm font-bold text-emerald-400 font-sans">
+                                ₹{settlement.amount.toFixed(2)}
+                              </span>
+                            </div>
+
+                            {isDebtor && (
+                              <button
+                                onClick={() => handleSettleUpGroup(settlement.to._id, settlement.amount, settlement.to.name)}
+                                disabled={actionLoading}
+                                className="w-full mt-2 flex items-center justify-center gap-1.5 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/15 text-emerald-400 text-xs font-semibold transition-all duration-200 disabled:opacity-50"
+                              >
+                                Settle Up
+                              </button>
+                            )}
                           </div>
-                          
-                          <div className="flex justify-between items-center pt-1.5 border-t border-white/[0.02]">
-                            <span className="text-[10px] text-gray-500 uppercase font-semibold">Amount to Pay</span>
-                            <span className="text-sm font-bold text-emerald-400 font-sans">
-                              ₹{settlement.amount.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -466,15 +558,35 @@ export default function GroupDetailsPage() {
               </button>
             </div>
           ) : (
-            <div className="glass rounded-2xl p-6 border border-white/[0.06] flex items-start gap-3">
-              <Info size={16} className="text-gray-500 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                  Member Access
-                </h4>
+            <div className="space-y-6 animate-fadeIn">
+              <div className="glass rounded-2xl p-6 border border-white/[0.06] flex items-start gap-3">
+                <Info size={16} className="text-gray-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    Member Access
+                  </h4>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    You are viewing this group as a member. Only the creator has privileges to add or remove members.
+                  </p>
+                </div>
+              </div>
+
+              <div className="glass rounded-2xl p-6 border border-white/[0.06] space-y-4">
+                <h3 className="font-brand font-semibold text-gray-200 text-sm uppercase tracking-wider flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-400" />
+                  Leave Group
+                </h3>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  You are viewing this group as a member. Only the creator has privileges to add or remove members.
+                  You can leave this group if your balance is exactly settled up (₹0.00). If you owe money or are owed money, you must settle up first.
                 </p>
+                
+                <button
+                  onClick={handleLeaveGroup}
+                  disabled={actionLoading}
+                  className="w-full flex items-center justify-center gap-2 h-11 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 text-red-400 font-semibold text-sm transition-all duration-300 disabled:opacity-50"
+                >
+                  Leave Group
+                </button>
               </div>
             </div>
           )}

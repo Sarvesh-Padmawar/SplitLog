@@ -3,8 +3,10 @@ import { useParams } from "react-router-dom";
 import api from "../../shared/services/axios";
 import FriendSummaryPanel from "../../features/friends/components/FriendSummaryPanel";
 import FriendActivityPanel from "../../features/friends/components/FriendActivityPanel";
+import { useSocket } from "../../services/socket/useSocket";
 
 export default function FriendPage() {
+  const { socket } = useSocket();
   const { friendId } = useParams();
   const [ledger, setLedger] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,20 @@ export default function FriendPage() {
       window.removeEventListener("focus", handleFocus);
     };
   }, [fetchLedger]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("expense_created", fetchLedger);
+    socket.on("expense_updated", fetchLedger);
+    socket.on("expense_deleted", fetchLedger);
+
+    return () => {
+      socket.off("expense_created", fetchLedger);
+      socket.off("expense_updated", fetchLedger);
+      socket.off("expense_deleted", fetchLedger);
+    };
+  }, [socket, fetchLedger]);
 
   if (loading) {
     return (

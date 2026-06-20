@@ -6,6 +6,8 @@ import {
   validateUpdateGroup,
   validateAddMember,
   validateCreateGroupExpense,
+  validateGroupId,
+  validateGroupSettleUp,
 } from "./group.validators.js";
 
 
@@ -147,5 +149,43 @@ export const getGroupBalances = asyncHandler(async (req, res) => {
     success: true,
     message: "Group balances calculated successfully",
     data: balancesSummary,
+  });
+});
+
+export const leaveGroup = asyncHandler(async (req, res) => {
+  const { groupId } = req.params;
+
+  const validation = validateGroupId({ groupId });
+  if (validation.error) {
+    throw new ApiError(400, validation.error);
+  }
+
+  await groupService.leaveGroup(req.user, groupId);
+
+  res.status(200).json({
+    success: true,
+    message: "Left the group successfully",
+  });
+});
+
+export const settleUpGroup = asyncHandler(async (req, res) => {
+  const { groupId } = req.params;
+
+  const paramValidation = validateGroupId({ groupId });
+  if (paramValidation.error) {
+    throw new ApiError(400, paramValidation.error);
+  }
+
+  const bodyValidation = validateGroupSettleUp(req.body);
+  if (bodyValidation.error) {
+    throw new ApiError(400, bodyValidation.error);
+  }
+
+  const settlement = await groupService.settleUpGroup(req.user, groupId, req.body);
+
+  res.status(200).json({
+    success: true,
+    message: "Group settlement recorded successfully",
+    data: settlement,
   });
 });

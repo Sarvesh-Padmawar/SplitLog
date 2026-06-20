@@ -61,9 +61,17 @@ export default function FriendSummaryPanel({
       {/* Friend Info */}
       <div className="glass rounded-2xl p-5">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-xl font-semibold shadow-glow ring-2 ring-emerald-500/20 ring-offset-2 ring-offset-surface-300">
-            {friend.name[0]}
-          </div>
+          {friend.avatar?.url ? (
+            <img
+              src={friend.avatar.url}
+              alt={friend.name}
+              className="w-14 h-14 rounded-full object-cover shadow-glow ring-2 ring-emerald-500/20 ring-offset-2 ring-offset-surface-300"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-xl font-semibold shadow-glow ring-2 ring-emerald-500/20 ring-offset-2 ring-offset-surface-300">
+              {friend.name[0]}
+            </div>
+          )}
           <div>
             <p className="text-lg font-semibold text-gray-100">{friend.name}</p>
             <p className="text-sm text-gray-500">@{friend.username}</p>

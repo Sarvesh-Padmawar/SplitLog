@@ -13,11 +13,13 @@ import FriendPage from "./pages/FriendDashboard/FriendPage";
 import ExpenseDetailPage from "./pages/ExpenseDetail/ExpenseDetailPage";
 import GroupsPage from "./features/groups/pages/GroupsPage";
 import GroupDetailsPage from "./features/groups/pages/GroupDetailsPage";
+import SettingsPage from "./pages/Settings/SettingsPage";
 import ToastContainer from "./components/Toast";
 import { ProtectedRoute } from "./modules/auth/routes/ProtectedRoute";
 import { PublicRoute } from "./modules/auth/routes/PublicRoute";
 import { AuthProvider } from "./modules/auth/context/AuthProvider";
 import { useAuth } from "./modules/auth/hooks/useAuth";
+import { SocketProvider } from "./services/socket/SocketProvider";
 
 
 function AppRoutes() {
@@ -56,6 +58,7 @@ function AppRoutes() {
           <Route path="/groups" element={<GroupsPage />} />
           <Route path="/groups/:groupId" element={<GroupDetailsPage />} />
           <Route path="/expense/:expenseId" element={<ExpenseDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </div>
@@ -65,7 +68,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <SocketProvider>
+        <AppRoutes />
+      </SocketProvider>
     </AuthProvider>
   );
 }

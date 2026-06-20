@@ -46,6 +46,7 @@ function DashboardLeft({ friends, loadingFriends }) {
                       _id: friend._id,
                       name: friend.name,
                       username: friend.username,
+                      avatar: friend.avatar,
                       youOwe: friend.youOwe || 0,
                       theyOwe: friend.theyOwe || 0,
                       netBalance: friend.netBalance || 0,

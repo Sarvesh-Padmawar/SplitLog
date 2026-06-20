@@ -77,7 +77,7 @@ export const authenticateUser = async ({ emailOrUsername, password }) => {
  * Fetches a user by ID, selecting specific fields.
  */
 export const getUserById = async (userId) => {
-  const user = await User.findById(userId).select("_id name username email isProfileComplete");
+  const user = await User.findById(userId).select("_id name username email isProfileComplete avatar");
   if (!user) {
     const error = new Error("User not found");
     error.status = 401;

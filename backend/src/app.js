@@ -12,6 +12,7 @@ import settlementRoutes from "./modules/settlements/settlement.routes.js";
 import notificationRoutes from "./modules/notifications/notification.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import groupRoutes from "./modules/group/group.routes.js";
+import userRoutes from "./modules/users/user.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { notFoundHandler } from "./middleware/notFound.middleware.js";
 
@@ -59,6 +60,7 @@ app.use("/api/settlements", settlementRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/groups", groupRoutes);
+app.use("/api/users", userRoutes);
 
 // ── ERROR HANDLING MIDDLEWARE ──────────────────────────────────────────────
 // 1. Catch 404 and forward to error handler

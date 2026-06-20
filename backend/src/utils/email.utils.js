@@ -173,3 +173,65 @@ export const sendPasswordResetEmail = async (to, rawToken) => {
 
   await transporter.sendMail(mailOptions);
 };
+
+// ── sendPasswordChangedEmail ────────────────────────────────────────────────
+/**
+ * Sends a security email notification notifying the user that their password was changed.
+ *
+ * @param {string} to – Recipient email address
+ */
+export const sendPasswordChangedEmail = async (to) => {
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: Number(process.env.EMAIL_PORT) || 587,
+    secure: Number(process.env.EMAIL_PORT) === 465,
+    family: 4,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM,
+    to,
+    subject: "Your SplitLog password has been changed",
+    text: `Hello,\n\nThis is a security notification to inform you that the password for your SplitLog account was recently changed.\n\nIf you performed this action, no further steps are required.\n\nIf you did not change your password, please contact support immediately or reset your password to secure your account.`,
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your SplitLog password has been changed</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f4f7; font-family: Arial, sans-serif; }
+    .wrapper { max-width: 560px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .header { background: #4f46e5; padding: 32px 40px; text-align: center; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+    .body { padding: 36px 40px; color: #374151; font-size: 15px; line-height: 1.6; }
+    .body p { margin: 0 0 16px; }
+    .footer { background: #f9fafb; padding: 20px 40px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>SplitLog Security Alert</h1>
+    </div>
+    <div class="body">
+      <p>Hi there 👋</p>
+      <p>This is a security notification to inform you that the password for your SplitLog account was recently changed.</p>
+      <p>If you performed this action, no further steps are required.</p>
+      <p><strong>If you did not change your password</strong>, please reset your password immediately or contact our support team to secure your account.</p>
+    </div>
+    <div class="footer">
+      &copy; ${new Date().getFullYear()} SplitLog. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>`,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
